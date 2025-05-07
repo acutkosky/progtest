@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item active">Exercise {{ exercise.id }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h2>{{ exercise.title }}</h2>
+            </div>
+            <div class="card-body">
+                <p>{{ exercise.description }}</p>
+                
+                {% if exercise.type == 'python' %}
+                <div class="mb-3">
+                    <label for="code-editor" class="form-label">Your Code:</label>
+                    <textarea id="code-editor">{{ exercise.template }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="runPythonCode()">Run Code</button>
+                </div>
+                <div class="mb-3">
+                    <label for="output" class="form-label">Output:</label>
+                    <pre id="output" class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;"></pre>
+                </div>
+                {% endif %}
+
+                {% if exercise.type == 'terminal' %}
+                <div id="terminal" class="border bg-dark text-light">
+                    <div id="terminal-output" class="p-2"></div>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark text-light border-0">$</span>
+                        <input type="text" id="terminal-input" class="form-control bg-dark text-light border-0" 
+                               placeholder="Enter command..." autocomplete="off">
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let pyodide = null;
+    let editor = null;
+    let currentExercise = {{ exercise|tojson|safe }};
+    let currentDir = '/';
+
+    // Initialize CodeMirror
+    document.addEventListener('DOMContentLoaded', function() {
+        if (currentExercise.type === 'python') {
+            editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+                mode: 'python',
+                theme: 'monokai',
+                lineNumbers: true,
+                indentUnit: 4,
+                tabSize: 4,
+                indentWithTabs: false,
+                lineWrapping: true,
+                matchBrackets: true,
+                autoCloseBrackets: true
+            });
+            initPyodide();
+        }
+    });
+
+    // Initialize Pyodide
+    async function initPyodide() {
+        try {
+            pyodide = await loadPyodide();
+            await pyodide.loadPackage(['numpy', 'pandas']);
+            document.getElementById('output').textContent = 'Pyodide loaded successfully!';
+        } catch (error) {
+            document.getElementById('output').textContent = 'Error loading Pyodide: ' + error;
+        }
+    }
+
+    // Run Python code
+    async function runPythonCode() {
+        if (!pyodide) {
+            document.getElementById('output').textContent = 'Pyodide is still loading...';
+            return;
+        }
+
+        const code = editor.getValue();
+        let output = '';
+        let passedTests = 0;
+        let totalTests = currentExercise.test_cases.length;
+
+        try {
+            // Run the code first to define any functions
+            await pyodide.runPythonAsync(code);
+            
+            // Run test cases
+            for (const testCase of currentExercise.test_cases) {
+                try {
+                    let result;
+                    if (testCase.input === null) {
+                        // For exercises without input parameters
+                        const outputStr = JSON.stringify(testCase.output);
+                        // Extract function name from the code
+                        const functionMatch = code.match(/def\s+(\w+)\s*\(/);
+                        const functionName = functionMatch ? functionMatch[1] : '';
+                        const testCode = `
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+
+import json
+expected = json.loads('${outputStr}')
+result = ${functionName}()
+print(f"Test case: Function call")
+print(f"Expected: {expected}")
+print(f"Got: {result}")
+# Convert both to tuples for comparison to handle any sequence type
+passed = tuple(result) == tuple(expected)
+print(f"Passed: {passed}")
+print("---")
+
+output = sys.stdout.getvalue()
+sys.stdout = sys.__stdout__
+(passed, output)
+`;
+                        const [testPassed, testOutput] = await pyodide.runPythonAsync(testCode);
+                        output += testOutput;
+                        if (testPassed) {
+                            passedTests++;
+                        }
+                    } else {
+                        // For exercises with input parameters
+                        const inputStr = JSON.stringify(testCase.input);
+                        const outputStr = JSON.stringify(testCase.output);
+                        // Extract function name from the code
+                        const functionMatch = code.match(/def\s+(\w+)\s*\(/);
+                        const functionName = functionMatch ? functionMatch[1] : '';
+                        const testCode = `
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+
+import json
+input_data = json.loads('${inputStr}')
+expected = json.loads('${outputStr}')
+
+# Special handling for exercise 5 (file processing)
+if '${functionName}' == 'count_word_occurrences':
+    # Create sample.txt with test content
+    with open('sample.txt', 'w') as f:
+        f.write('''Python is a great language
+I love PYTHON programming
+python makes coding fun
+''')
+    
+    # Display file contents for clarity
+    print("Test file contents:")
+    print("------------------")
+    with open('sample.txt', 'r') as f:
+        print(f.read())
+    print("------------------")
+
+result = ${functionName}(*input_data)
+print(f"Test case: {input_data}")
+print(f"Expected: {expected}")
+print(f"Got: {result}")
+# Handle different types of results
+if isinstance(result, dict) and isinstance(expected, dict):
+    passed = result == expected  # Dictionary comparison is order-independent
+elif isinstance(result, (list, tuple)) and isinstance(expected, (list, tuple)):
+    passed = tuple(result) == tuple(expected)  # Sequence comparison
+else:
+    passed = result == expected  # Direct comparison for other types
+print(f"Passed: {passed}")
+print("---")
+
+output = sys.stdout.getvalue()
+sys.stdout = sys.__stdout__
+(passed, output)
+`;
+                        const [testPassed, testOutput] = await pyodide.runPythonAsync(testCode);
+                        output += testOutput;
+                        if (testPassed) {
+                            passedTests++;
+                        }
+                    }
+                } catch (error) {
+                    output += `Error in test case: ${error}\n`;
+                }
+            }
+            
+            // Add test summary
+            output += `\nPassed ${passedTests} out of ${totalTests} tests\n`;
+            
+            // Color the output based on test results
+            const outputElement = document.getElementById('output');
+            outputElement.textContent = output;
+            if (passedTests === totalTests) {
+                outputElement.style.color = '#28a745';
+            } else {
+                outputElement.style.color = '#dc3545';
+            }
+        } catch (error) {
+            document.getElementById('output').textContent = 'Error: ' + error;
+            document.getElementById('output').style.color = '#dc3545';
+        }
+    }
+
+    // Terminal functionality
+    if (currentExercise.type === 'terminal') {
+        const terminal = document.getElementById('terminal');
+        const output = document.getElementById('terminal-output');
+        const input = document.getElementById('terminal-input');
+        let commandHistory = [];
+        let historyIndex = -1;
+        let currentDir = '/';
+
+        // Initialize Pyodide for terminal
+        initPyodide().then(() => {
+            output.innerHTML += `<div class="text-success">Terminal initialized. You can start entering commands.</div>`;
+        });
+
+        // Handle command submission
+        input.addEventListener('keypress', async function(e) {
+            if (e.key === 'Enter') {
+                const command = input.value.trim();
+                if (command) {
+                    // Add command to history
+                    commandHistory.push(command);
+                    historyIndex = commandHistory.length;
+                    
+                    // Display command
+                    output.innerHTML += `<div class="text-light">$ ${command}</div>`;
+                    
+                    // Clear input
+                    input.value = '';
+                    
+                    // Execute command
+                    try {
+                        const [cmd, ...args] = command.split(' ');
+                        
+                        // Handle command redirection
+                        const redirectionIndex = args.findIndex(arg => arg === '>');
+                        let outputFile = null;
+                        if (redirectionIndex !== -1) {
+                            outputFile = args[redirectionIndex + 1];
+                            args.splice(redirectionIndex, 2);
+                        }
+
+                        // Execute command with captured output
+                        const result = await pyodide.runPythonAsync(`
+import sys
+from io import StringIO
+import os
+import shutil
+import stat
+import datetime
+import glob
+import fnmatch
+import pathlib
+
+sys.stdout = StringIO()
+try:
+    # Parse command and arguments
+    cmd = '${cmd}'
+    args = ${JSON.stringify(args)}
+    
+    # Handle redirection
+    output_file = ${outputFile ? `'${outputFile}'` : 'None'}
+    
+    # Execute command
+    if cmd == 'cd':
+        if not args:
+            print(os.getcwd())
+        else:
+            os.chdir(args[0])
+    elif cmd == 'ls':
+        # Parse options
+        show_hidden = '-a' in args
+        long_format = '-l' in args
+        recursive = '-R' in args
+        
+        # Remove options from args
+        args = [arg for arg in args if not arg.startswith('-')]
+        
+        # Get target directory
+        target = '.' if not args else args[0]
+        
+        if os.path.isdir(target):
+            def list_dir(dir_path, indent=''):
+                files = os.listdir(dir_path)
+                if not show_hidden:
+                    files = [f for f in files if not f.startswith('.')]
+                
+                if long_format:
+                    for f in files:
+                        path = os.path.join(dir_path, f)
+                        st = os.stat(path)
+                        mode = stat.filemode(st.st_mode)
+                        size = st.st_size
+                        mtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime('%b %d %H:%M')
+                        print(f"{indent}{mode} {size:8d} {mtime} {f}")
+                else:
+                    print(indent + '\\n'.join(files))
+                
+                if recursive:
+                    for f in files:
+                        path = os.path.join(dir_path, f)
+                        if os.path.isdir(path):
+                            print(f"\\n{indent}{path}:")
+                            list_dir(path, indent + '  ')
+            
+            list_dir(target)
+        else:
+            print(f"ls: cannot access '{target}': No such file or directory")
+    elif cmd == 'pwd':
+        print(os.getcwd())
+    elif cmd == 'mkdir':
+        os.makedirs(args[0], exist_ok=True)
+    elif cmd == 'rm':
+        if '-r' in args or '-rf' in args:
+            args = [arg for arg in args if not arg.startswith('-')]
+            shutil.rmtree(args[0])
+        else:
+            os.remove(args[0])
+    elif cmd == 'rmdir':
+        os.rmdir(args[0])
+    elif cmd == 'touch':
+        pathlib.Path(args[0]).touch()
+    elif cmd == 'cat':
+        with open(args[0], 'r') as f:
+            print(f.read())
+    elif cmd == 'echo':
+        content = ' '.join(args)
+        if output_file:
+            with open(output_file, 'w') as f:
+                f.write(content)
+        else:
+            print(content)
+    elif cmd == 'find':
+        start_dir = '.' if not args else args[0]
+        pattern = '*' if len(args) <= 1 else args[1]
+        
+        for root, dirs, files in os.walk(start_dir):
+            for name in files:
+                if fnmatch.fnmatch(name, pattern):
+                    print(os.path.join(root, name))
+    elif cmd == 'grep':
+        pattern = args[0]
+        files = args[1:] if len(args) > 1 else ['.']
+        
+        for file in files:
+            if os.path.isfile(file):
+                with open(file, 'r') as f:
+                    for i, line in enumerate(f, 1):
+                        if pattern in line:
+                            print(f"{file}:{i}:{line.rstrip()}")
+    elif cmd == 'cp':
+        if '-r' in args:
+            args = [arg for arg in args if not arg.startswith('-')]
+            shutil.copytree(args[0], args[1])
+        else:
+            shutil.copy2(args[0], args[1])
+    elif cmd == 'mv':
+        shutil.move(args[0], args[1])
+    elif cmd == 'head':
+        n = 10
+        if args[0].startswith('-'):
+            n = int(args[0][1:])
+            args = args[1:]
+        
+        with open(args[0], 'r') as f:
+            for _ in range(n):
+                line = f.readline()
+                if not line:
+                    break
+                print(line.rstrip())
+    elif cmd == 'tail':
+        n = 10
+        if args[0].startswith('-'):
+            n = int(args[0][1:])
+            args = args[1:]
+        
+        with open(args[0], 'r') as f:
+            lines = f.readlines()
+            for line in lines[-n:]:
+                print(line.rstrip())
+    else:
+        print(f"{cmd}: command not found")
+
+except FileNotFoundError as e:
+    print(f"{cmd}: {str(e)}")
+except Exception as e:
+    print(f"{cmd}: {str(e)}")
+
+output = sys.stdout.getvalue()
+sys.stdout = sys.__stdout__
+output
+                        `);
+                        
+                        if (result) {
+                            output.innerHTML += `<div class="text-light">${result}</div>`;
+                        }
+                    } catch (error) {
+                        output.innerHTML += `<div class="text-danger">Error: ${error}</div>`;
+                    }
+                    
+                    // Scroll to bottom
+                    terminal.scrollTop = terminal.scrollHeight;
+                }
+            }
+        });
+
+        // Handle command history
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    input.value = '';
+                }
+            }
+        });
+
+        // Focus input on click
+        terminal.addEventListener('click', function() {
+            input.focus();
+        });
+
+        // Initial focus
+        input.focus();
+    }
+</script>
+{% endblock %} 
