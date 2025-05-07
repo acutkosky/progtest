@@ -17,6 +17,11 @@
         <div class="card">
             <div class="card-header">
                 <h2>{{ exercise.title }}</h2>
+                {% if exercise.type == 'terminal' %}
+                <div id="exercise-status" class="mt-2">
+                    <span class="badge bg-secondary">Not Started</span>
+                </div>
+                {% endif %}
             </div>
             <div class="card-body">
                 <p>{{ exercise.description }}</p>
@@ -410,6 +415,20 @@ output
                         
                         if (result) {
                             output.innerHTML += `<div class="text-light">${result}</div>`;
+                            
+                            // Check if this is a terminal exercise with expected output
+                            if (currentExercise.type === 'terminal' && currentExercise.expected_output) {
+                                const statusElement = document.getElementById('exercise-status');
+                                // Only update status if not already completed
+                                if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
+                                    if (result.includes(currentExercise.expected_output)) {
+                                        output.innerHTML += `<div class="text-success mt-2">Success! You've completed the exercise.</div>`;
+                                        statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
+                                    } else {
+                                        statusElement.innerHTML = '<span class="badge bg-warning">In Progress</span>';
+                                    }
+                                }
+                            }
                         }
                     } catch (error) {
                         output.innerHTML += `<div class="text-danger">Error: ${error}</div>`;
