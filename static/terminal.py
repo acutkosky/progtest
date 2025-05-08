@@ -33,7 +33,8 @@ def process_arg(arg):
                     result += arg[i + 1]
                     i += 2
                 else:
-                    result += arg[i:i+2]
+                    # Keep unrecognized escape sequences as-is
+                    result += '\\' + arg[i + 1]
                     i += 2
             else:
                 result += arg[i]
@@ -174,10 +175,20 @@ def execute_command(command):
             # Join arguments with a single space, no additional processing needed
             # since arguments are already processed by process_arg
             content = ' '.join(args)
+            
+            # For echo, we want to print exactly what's in content, without adding
+            # an extra newline if the content already ends with one
             if output_file:
-                write_output(content, output_file, append_mode)
+                # For files, we still want to ensure there's exactly one trailing newline
+                write_output(content.rstrip('\n'), output_file, append_mode)
             else:
-                print(content, end='\n')
+                # For terminal output, print exactly what's in content
+                # If it ends with \n, that will be preserved
+                # If it doesn't, no extra newline will be added
+                print(content, end='')
+                # Only add a newline if the content doesn't end with one
+                if not content.endswith('\n'):
+                    print()
         elif cmd == 'find':
             start_dir = '.' if not args else args[0]
             pattern = '*' if len(args) <= 1 else args[1]

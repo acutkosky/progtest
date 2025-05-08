@@ -38,6 +38,12 @@
     }
     .terminal-line {
         margin-bottom: 5px;
+        min-height: 1.2em;  /* Ensure each line takes up at least one line height */
+        line-height: 1.2em; /* Set consistent line height */
+    }
+    /* Preserve whitespace in terminal lines */
+    .terminal-line:empty::before {
+        content: "\00a0";  /* Use non-breaking space to force height */
     }
 </style>
 
@@ -350,13 +356,17 @@ output  # Return the output to JavaScript
                         if (result) {
                             // Add result to output
                             const resultLines = result.split('\n');
-                            for (const line of resultLines) {
-                                if (line.trim()) {
-                                    const resultLine = document.createElement('div');
-                                    resultLine.className = 'text-light terminal-line';
-                                    resultLine.textContent = line;
-                                    output.appendChild(resultLine);
+                            // Handle all lines, including empty ones, except the last one if it's empty
+                            // (because split('\n') on a string ending with \n creates an empty last element)
+                            for (let i = 0; i < resultLines.length; i++) {
+                                // Skip the last empty line as it's an artifact of the trailing newline
+                                if (i === resultLines.length - 1 && resultLines[i] === '') {
+                                    continue;
                                 }
+                                const resultLine = document.createElement('div');
+                                resultLine.className = 'text-light terminal-line';
+                                resultLine.textContent = resultLines[i];
+                                output.appendChild(resultLine);
                             }
                             scrollToBottom();
                             
