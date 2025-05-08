@@ -107,9 +107,10 @@
     let pyodide = null;
     let editor = null;
     let currentExercise = {{ exercise|tojson|safe }};
+    let terminalModule = null;
 
-    // Initialize CodeMirror
-    document.addEventListener('DOMContentLoaded', function() {
+    // Initialize CodeMirror and Pyodide
+    document.addEventListener('DOMContentLoaded', async function() {
         if (currentExercise.type === 'python') {
             editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
                 mode: 'python',
@@ -122,8 +123,9 @@
                 matchBrackets: true,
                 autoCloseBrackets: true
             });
-            initPyodide();
         }
+        // Initialize Pyodide for both Python and Terminal exercises
+        await initPyodide();
     });
 
     // Initialize Pyodide
@@ -132,18 +134,40 @@
             pyodide = await loadPyodide();
             await pyodide.loadPackage(['numpy', 'pandas']);
             
-            // Only update output element for Python exercises
             if (currentExercise.type === 'python') {
                 document.getElementById('output').textContent = 'Environment ready. Click "Run Code" to test your solution.';
+            } else if (currentExercise.type === 'terminal') {
+                // Load the terminal.py module for terminal exercises
+                const response = await fetch('/static/terminal.py');
+                const terminalCode = await response.text();
+                
+                // Create the terminal module in Python
+                pyodide.runPython('import sys');
+                pyodide.runPython('from io import StringIO');
+                pyodide.runPython('import os');
+                pyodide.runPython('terminal = type(sys)("terminal")');
+                pyodide.runPython('sys.modules["terminal"] = terminal');
+                
+                // Add the terminal code to the module
+                // First store the code in a Python variable to avoid string escaping issues
+                pyodide.globals.set('terminal_code', terminalCode);
+                pyodide.runPython('exec(terminal_code, sys.modules["terminal"].__dict__)');
+                
+                // Import the terminal module
+                terminalModule = pyodide.pyimport("terminal");
+                
+                const initLine = document.createElement('div');
+                initLine.className = 'text-success terminal-line';
+                initLine.textContent = 'Terminal ready. Enter commands to begin.';
+                document.getElementById('terminal-output').appendChild(initLine);
             }
             return true;
         } catch (error) {
-            // Handle error differently based on exercise type
-            if (currentExercise.type === 'python') {
-                document.getElementById('output').textContent = 'Error loading Python environment: ' + error;
-            } else {
-                console.error('Error loading Pyodide:', error);
-            }
+            console.error('Error loading Pyodide:', error);
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'text-danger terminal-line';
+            errorMsg.textContent = 'Error initializing terminal: ' + error;
+            document.getElementById('terminal-output').appendChild(errorMsg);
             return false;
         }
     }
@@ -207,14 +231,6 @@
             }, 10);
         }
 
-        // Initialize terminal
-        output.innerHTML = '';
-        const initLine = document.createElement('div');
-        initLine.className = 'text-success terminal-line';
-        initLine.textContent = 'Terminal ready. Enter commands to begin.';
-        output.appendChild(initLine);
-        scrollToBottom();
-
         // Handle command submission
         input.addEventListener('keypress', async function(e) {
             if (e.key === 'Enter') {
@@ -231,29 +247,25 @@
                     scrollToBottom();
                     
                     try {
-                        const response = await fetch('/submit/terminal', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ command })
-                        });
+                        // Execute command using Pyodide
+                        const result = terminalModule.execute_command(command);
                         
-                        const result = await response.json();
-                        
-                        if (result.success && result.output) {
-                            const lines = result.output.split('\n');
+                        if (result) {
+                            const lines = result.split('\n');
                             for (const line of lines) {
                                 const resultLine = document.createElement('div');
                                 resultLine.className = 'text-light terminal-line';
                                 resultLine.textContent = line;
+                                // Force empty lines to take up space
+                                if (!line) {
+                                    resultLine.innerHTML = '&nbsp;';
+                                }
                                 output.appendChild(resultLine);
                             }
                             scrollToBottom();
                             
                             // Check for exercise completion
-                            if (currentExercise.expected_output && 
-                                result.output.includes(currentExercise.expected_output)) {
+                            if (currentExercise.expected_output && result.includes(currentExercise.expected_output)) {
                                 const statusElement = document.getElementById('exercise-status');
                                 if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
                                     const successLine = document.createElement('div');
@@ -264,12 +276,6 @@
                                     scrollToBottom();
                                 }
                             }
-                        } else if (!result.success) {
-                            const errorLine = document.createElement('div');
-                            errorLine.className = 'text-danger terminal-line';
-                            errorLine.textContent = result.error;
-                            output.appendChild(errorLine);
-                            scrollToBottom();
                         }
                     } catch (error) {
                         const errorLine = document.createElement('div');
