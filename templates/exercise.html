@@ -273,9 +273,34 @@
                             // Check for exercise completion
                             if (currentExercise.expected_command_patterns && currentExercise.expected_output_patterns) {
                                 const commandMatches = Array.from(currentExercise.expected_command_patterns)
-                                    .every(pattern => command.toLowerCase().includes(pattern.toLowerCase()));
+                                    .every(pattern => {
+                                        try {
+                                            const regex = new RegExp(pattern);
+                                            console.log('Command pattern:', pattern);
+                                            console.log('Command:', command);
+                                            console.log('Command match:', regex.test(command));
+                                            return regex.test(command);
+                                        } catch (e) {
+                                            console.error('Regex error:', e);
+                                            return command.toLowerCase().includes(pattern.toLowerCase());
+                                        }
+                                    });
                                 const outputMatches = Array.from(currentExercise.expected_output_patterns)
-                                    .every(pattern => result.toLowerCase().includes(pattern.toLowerCase()));
+                                    .every(pattern => {
+                                        try {
+                                            const regex = new RegExp(pattern);
+                                            console.log('Output pattern:', pattern);
+                                            console.log('Output:', result);
+                                            console.log('Output match:', regex.test(result));
+                                            return regex.test(result);
+                                        } catch (e) {
+                                            console.error('Regex error:', e);
+                                            return result.toLowerCase().includes(pattern.toLowerCase());
+                                        }
+                                    });
+                                    
+                                console.log('Command matches:', commandMatches);
+                                console.log('Output matches:', outputMatches);
                                     
                                 if (commandMatches && outputMatches) {
                                     const statusElement = document.getElementById('exercise-status');

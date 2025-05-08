@@ -126,8 +126,13 @@ Hint: You can use 'echo' with the -e flag and \\n for newlines to create the fil
             "cat names.txt",
             "grep 'Bob' names.txt"
         ],
-        expected_command_patterns=["names.txt", "grep"],
-        expected_output_patterns=["Bob"]
+        expected_command_patterns=[
+            "names\\.txt",  # File name with escaped dot
+            "grep.*\\bBob\\b"  # grep followed by word-bounded Bob
+        ],
+        expected_output_patterns=[
+            "^\\s*Bob\\s*\\n*$"  # Bob on its own line, allowing for whitespace and newline
+        ]
     ),
     Exercise(
         id=7,
@@ -145,17 +150,20 @@ Required steps:
    └── public/</pre>
 <pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Navigate into the components directory
-3. Verify you're in the correct location (path should end with components)
-4. List all directories to verify the structure
+3. Run pwd to verify you're in the correct location (path should end with webapp/src/components)
 
-Commands you'll need: mkdir -p, cd, pwd, ls</pre>""",
+Commands you'll need: mkdir -p, cd, pwd</pre>""",
         commands=[
             "mkdir -p webapp/src/components webapp/src/styles webapp/public",
             "cd webapp/src/components",
             "pwd"
         ],
-        expected_command_patterns=["cd", "components"],
-        expected_output_patterns=["components"]
+        expected_command_patterns=[
+            "pwd"  # Must use pwd command to verify location
+        ],
+        expected_output_patterns=[
+            "\\/home\\/pyodide\\/webapp\\/src\\/components\\n*$"  # Full path must match exactly, with optional newline at end
+        ]
     ),
     Exercise(
         id=8,
@@ -180,8 +188,10 @@ The final permissions should show the executable bit set for all users (chmod a+
             "chmod a+x greet.sh",
             "ls -l greet.sh"
         ],
-        expected_command_patterns=["chmod", "greet.sh"],
-        expected_output_patterns=["x"]
+        expected_command_patterns=[],
+        expected_output_patterns=[
+            "-.*x.*x.*x.*greet\\.sh"
+        ]
     ),
     Exercise(
         id=9,

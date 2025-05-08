@@ -204,7 +204,88 @@ def execute_single_command(command: Command) -> None:
         elif command.cmd == 'pwd':
             print(os.getcwd())
         elif command.cmd == 'mkdir':
-            os.makedirs(command.args[0], exist_ok=True)
+            # Parse options
+            make_parents = '-p' in command.args
+            # Get non-option arguments
+            dirs = [arg for arg in command.args if not arg.startswith('-')]
+            
+            try:
+                for dir_path in dirs:
+                    if make_parents:
+                        os.makedirs(dir_path, exist_ok=True)
+                    else:
+                        os.mkdir(dir_path)
+            except FileExistsError:
+                if not make_parents:
+                    print(f"mkdir: cannot create directory '{dir_path}': File exists")
+            except FileNotFoundError:
+                if not make_parents:
+                    print(f"mkdir: cannot create directory '{dir_path}': No such file or directory")
+        elif command.cmd == 'chmod':
+            if not command.args:
+                print("chmod: missing operand")
+                return
+                
+            mode_str = command.args[0]
+            target = command.args[1] if len(command.args) > 1 else None
+            
+            if not target:
+                print("chmod: missing operand after", mode_str)
+                return
+                
+            try:
+                # Handle symbolic mode (e.g., a+x)
+                if '+' in mode_str or '-' in mode_str or '=' in mode_str:
+                    current_mode = stat.S_IMODE(os.stat(target).st_mode)
+                    
+                    # Parse the symbolic mode
+                    # Handle both 'a+x' and '+x' formats
+                    if mode_str[0] in 'ugo':
+                        who = mode_str[0]
+                        op = mode_str[1]
+                        what = mode_str[2:]
+                    else:
+                        who = 'a'  # Default to 'all' if no who specified
+                        if mode_str[0] in '+-=':
+                            op = mode_str[0]
+                            what = mode_str[1:]
+                        else:
+                            who = mode_str[0]  # Explicit 'a' specified
+                            op = mode_str[1]
+                            what = mode_str[2:]
+                    
+                    # Initialize permission masks
+                    if what == 'x':
+                        if who == 'a':
+                            mask = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                        elif who == 'u':
+                            mask = stat.S_IXUSR
+                        elif who == 'g':
+                            mask = stat.S_IXGRP
+                        else:  # who == 'o'
+                            mask = stat.S_IXOTH
+                            
+                        # Apply the operation
+                        if op == '+':
+                            new_mode = current_mode | mask
+                        elif op == '-':
+                            new_mode = current_mode & ~mask
+                        else:  # op == '='
+                            new_mode = (current_mode & ~(stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) | mask
+                    
+                    # Apply the mode change
+                    os.chmod(target, new_mode)
+                # Handle octal mode
+                else:
+                    os.chmod(target, int(mode_str, 8))
+                    
+            except ValueError:
+                print(f"chmod: invalid mode: '{mode_str}'")
+            except FileNotFoundError:
+                print(f"chmod: cannot access '{target}': No such file or directory")
+            except Exception as e:
+                print(f"chmod: error: {str(e)}")
+                
         elif command.cmd == 'rm':
             if '-r' in command.args or '-rf' in command.args:
                 args = [arg for arg in command.args if not arg.startswith('-')]
@@ -252,6 +333,129 @@ def execute_single_command(command: Command) -> None:
                                     print(f"{file}:{i}:{line}", end='')
                                 else:
                                     print(line, end='')
+        elif command.cmd == 'sort':
+            # Parse options
+            numeric = '-n' in command.args
+            reverse = '-r' in command.args
+            
+            # Get input source (file or stdin)
+            files = [arg for arg in command.args if not arg.startswith('-')]
+            lines = []
+            
+            if not files:  # Read from stdin
+                lines = sys.stdin.readlines()
+            else:
+                for file in files:
+                    with open(file, 'r') as f:
+                        lines.extend(f.readlines())
+            
+            # Sort the lines
+            if numeric:
+                # Extract leading numbers for numeric sort
+                def get_num(line):
+                    parts = line.strip().split()
+                    try:
+                        return float(parts[0]) if parts else 0
+                    except ValueError:
+                        return 0
+                lines.sort(key=get_num, reverse=reverse)
+            else:
+                lines.sort(reverse=reverse)
+            
+            # Output sorted lines
+            for line in lines:
+                print(line, end='')
+                
+        elif command.cmd == 'uniq':
+            # Parse options
+            count = '-c' in command.args
+            
+            # Get input source (file or stdin)
+            files = [arg for arg in command.args if not arg.startswith('-')]
+            lines = []
+            
+            if not files:  # Read from stdin
+                lines = sys.stdin.readlines()
+            else:
+                with open(files[0], 'r') as f:
+                    lines = f.readlines()
+            
+            # Process lines
+            if not lines:
+                return
+                
+            current_line = lines[0]
+            current_count = 1
+            
+            for line in lines[1:]:
+                if line == current_line:
+                    current_count += 1
+                else:
+                    if count:
+                        print(f"{current_count:>7} {current_line}", end='')
+                    else:
+                        print(current_line, end='')
+                    current_line = line
+                    current_count = 1
+            
+            # Print last group
+            if count:
+                print(f"{current_count:>7} {current_line}", end='')
+            else:
+                print(current_line, end='')
+                
+        elif command.cmd == 'wc':
+            # Parse options
+            count_lines = '-l' in command.args
+            count_words = '-w' in command.args
+            count_chars = '-c' in command.args
+            # Default to all if no options specified
+            if not (count_lines or count_words or count_chars):
+                count_lines = count_words = count_chars = True
+            
+            # Get input source (file or stdin)
+            files = [arg for arg in command.args if not arg.startswith('-')]
+            if not files:  # Read from stdin
+                content = sys.stdin.read()
+                lines = content.splitlines()
+                words = content.split()
+                chars = len(content)
+                
+                if count_lines:
+                    print(f"{len(lines):>7}", end='')
+                if count_words:
+                    print(f"{len(words):>7}", end='')
+                if count_chars:
+                    print(f"{chars:>7}", end='')
+                print()
+            else:
+                total_lines = total_words = total_chars = 0
+                for file in files:
+                    with open(file, 'r') as f:
+                        content = f.read()
+                        lines = content.splitlines()
+                        words = content.split()
+                        chars = len(content)
+                        
+                        if count_lines:
+                            print(f"{len(lines):>7}", end='')
+                            total_lines += len(lines)
+                        if count_words:
+                            print(f"{len(words):>7}", end='')
+                            total_words += len(words)
+                        if count_chars:
+                            print(f"{chars:>7}", end='')
+                            total_chars += chars
+                        print(f" {file}")
+                
+                if len(files) > 1:
+                    if count_lines:
+                        print(f"{total_lines:>7}", end='')
+                    if count_words:
+                        print(f"{total_words:>7}", end='')
+                    if count_chars:
+                        print(f"{total_chars:>7}", end='')
+                    print(" total")
         else:
             print(f"{command.cmd}: command not found", file=sys.stderr)
             
