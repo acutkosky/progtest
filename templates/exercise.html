@@ -1,6 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    #terminal {
+        font-family: 'Courier New', monospace;
+        height: 400px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+    #terminal-output {
+        flex-grow: 1;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        display: flex;
+        flex-direction: column-reverse;
+    }
+    #terminal-prompt {
+        border-top: 1px solid #444;
+        padding: 8px;
+        margin-bottom: 0;
+    }
+    #terminal-input {
+        background-color: transparent !important;
+        color: #fff !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    .terminal-line {
+        margin-top: 5px;
+        margin-bottom: 0;
+    }
+</style>
+
 <div class="row">
     <div class="col-md-12">
         <nav aria-label="breadcrumb">
@@ -42,10 +76,10 @@
 
                 {% if exercise.type == 'terminal' %}
                 <div id="terminal" class="border bg-dark text-light">
-                    <div id="terminal-output" class="p-2"></div>
-                    <div class="input-group">
+                    <div id="terminal-output" class="flex-grow-1"></div>
+                    <div id="terminal-prompt" class="input-group">
                         <span class="input-group-text bg-dark text-light border-0">$</span>
-                        <input type="text" id="terminal-input" class="form-control bg-dark text-light border-0" 
+                        <input type="text" id="terminal-input" class="form-control bg-dark text-light" 
                                placeholder="Enter command..." autocomplete="off">
                     </div>
                 </div>
@@ -237,16 +271,23 @@ sys.stdout = sys.__stdout__
         const terminal = document.getElementById('terminal');
         const output = document.getElementById('terminal-output');
         const input = document.getElementById('terminal-input');
+        const prompt = document.getElementById('terminal-prompt');
         let commandHistory = [];
         let historyIndex = -1;
         let currentDir = '/';
 
+        function scrollToBottom() {
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
         // Initialize Pyodide for terminal
         initPyodide().then((success) => {
             if (success) {
-                output.innerHTML += `<div class="text-success">Terminal initialized. You can start entering commands.</div>`;
+                output.innerHTML = `<div class="text-success terminal-line">Terminal initialized. You can start entering commands.</div>`;
+                scrollToBottom();
             } else {
-                output.innerHTML += `<div class="text-danger">Failed to initialize terminal. Please refresh the page.</div>`;
+                output.innerHTML = `<div class="text-danger terminal-line">Failed to initialize terminal. Please refresh the page.</div>`;
+                scrollToBottom();
             }
         });
 
@@ -259,11 +300,15 @@ sys.stdout = sys.__stdout__
                     commandHistory.push(command);
                     historyIndex = commandHistory.length;
                     
-                    // Display command
-                    output.innerHTML += `<div class="text-light">$ ${command}</div>`;
+                    // Display command (directly in the output div)
+                    const newOutput = `<div class="text-light terminal-line">$ ${command}</div>`;
+                    output.innerHTML = newOutput + output.innerHTML;
                     
                     // Clear input
                     input.value = '';
+                    
+                    // Ensure prompt is visible
+                    scrollToBottom();
                     
                     // Execute command
                     try {
@@ -438,7 +483,10 @@ output
                         `);
                         
                         if (result) {
-                            output.innerHTML += `<div class="text-light">${result}</div>`;
+                            // Insert result before other output
+                            const resultHtml = `<div class="text-light terminal-line">${result}</div>`;
+                            output.innerHTML = resultHtml + output.innerHTML;
+                            scrollToBottom();
                             
                             // Check if this is a terminal exercise with expected output
                             if (currentExercise.type === 'terminal' && currentExercise.expected_output) {
@@ -446,8 +494,10 @@ output
                                 // Only update status if not already completed
                                 if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
                                     if (result.includes(currentExercise.expected_output)) {
-                                        output.innerHTML += `<div class="text-success mt-2">Success! You've completed the exercise.</div>`;
+                                        const successHtml = `<div class="text-success mt-2 terminal-line">Success! You've completed the exercise.</div>`;
+                                        output.innerHTML = successHtml + output.innerHTML;
                                         statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
+                                        scrollToBottom();
                                     } else {
                                         statusElement.innerHTML = '<span class="badge bg-warning">In Progress</span>';
                                     }
@@ -455,11 +505,10 @@ output
                             }
                         }
                     } catch (error) {
-                        output.innerHTML += `<div class="text-danger">Error: ${error}</div>`;
+                        const errorHtml = `<div class="text-danger terminal-line">Error: ${error}</div>`;
+                        output.innerHTML = errorHtml + output.innerHTML;
+                        scrollToBottom();
                     }
-                    
-                    // Scroll to bottom
-                    terminal.scrollTop = terminal.scrollHeight;
                 }
             }
         });
