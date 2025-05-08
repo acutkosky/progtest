@@ -1,27 +1,22 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h1 class="mb-4">Welcome to the AI/ML Diagnostic Test</h1>
-        <p class="lead">This test will help you assess your readiness for AI/ML specialization by evaluating your programming skills and computer literacy.</p>
-    </div>
-</div>
-
-<div class="row mt-4">
-    {% for exercise in exercises %}
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">{{ exercise.title }}</h5>
-                <p class="card-text">{{ exercise.summary }}</p>
-                <a href="{{ url_for('exercise', exercise_id=exercise.id) }}" class="btn btn-primary">Start Exercise</a>
-            </div>
-            <div class="card-footer text-muted">
-                Type: {{ exercise.type|title }}
+<div class="container mt-5">
+    <h1 class="mb-4">Welcome to the Python/Terminal Diagnostic Test</h1>
+    <p class="lead">This test will help you assess your programming skills by evaluating your Python knowledge and command-line proficiency.</p>
+    
+    <div class="row mt-5">
+        {% for exercise in exercises %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Exercise {{ exercise.id }}: {{ exercise.title }}</h5>
+                    <p class="card-text">{{ exercise.summary }}</p>
+                    <a href="/exercise/{{ exercise.id }}" class="btn btn-primary">Start Exercise</a>
+                </div>
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
 {% endblock %} 
