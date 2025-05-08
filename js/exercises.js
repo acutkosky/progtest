@@ -39,8 +39,12 @@ Required steps:
 1. Create a new file named 'test.txt'
 2. List the contents of the current directory to verify the file was created</pre>`,
         commands: ["ls", "touch test.txt", "ls"],
-        expectedCommandPatterns: ["ls"],
-        expectedOutputPatterns: ["test.txt"]
+        expectedCommandPatterns: [
+            "^\\s*ls\\s*$"  // Match only the plain 'ls' command without arguments
+        ],
+        expectedOutputPatterns: [
+            "(?:^|\\s)test\\.txt(?:\\s|$)"  // Match test.txt as a standalone word
+        ]
     },
     {
         id: 4,

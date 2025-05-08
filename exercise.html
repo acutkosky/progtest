@@ -316,11 +316,18 @@
                                     
                                     // Set up status callback
                                     terminal.setStatusCallback((command) => {
+                                        // Check if this is the first command to update from Ready to In Progress
+                                        const currentStatus = document.getElementById('exercise-status').textContent.trim();
+                                        const isReady = currentStatus.includes('Ready');
+                                        
+                                        // Check for exercise completion
                                         const isComplete = terminal.checkExerciseCompletion(window.currentExercise);
+                                        
                                         if (isComplete) {
                                             document.getElementById('exercise-status').innerHTML = 
                                                 '<span class="badge bg-success">Completed</span>';
-                                        } else {
+                                        } else if (isReady && !isComplete) {
+                                            // Only switch to In Progress on first command if not complete
                                             document.getElementById('exercise-status').innerHTML = 
                                                 '<span class="badge bg-primary">In Progress</span>';
                                         }

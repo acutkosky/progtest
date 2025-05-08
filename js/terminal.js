@@ -8,6 +8,7 @@ class TerminalInterface {
         this.commandHistory = [];
         this.historyIndex = -1;
         this.statusCallback = null;
+        this.exerciseCompleted = false; // Track if exercise was already completed
     }
 
     // Initialize Pyodide and load terminal.py
@@ -94,10 +95,12 @@ class TerminalInterface {
                 lines.forEach(line => this.addOutputLine(line));
             }
 
-            // Notify status change if callback is set
-            if (this.statusCallback) {
-                this.statusCallback(command);
-            }
+            // Add a small delay before checking status to ensure output is rendered
+            setTimeout(() => {
+                if (this.statusCallback) {
+                    this.statusCallback(command);
+                }
+            }, 50);
 
             return true;
         } catch (error) {
@@ -114,17 +117,80 @@ class TerminalInterface {
         }
 
         try {
-            // For demonstration purposes, assume the exercise is complete if all expected commands
-            // have been run. In a real implementation, you'd check against the patterns.
-            // This is simplified since we can't easily access the filesystem state from JS.
-            const commandsHistory = this.commandHistory.join('\n').toLowerCase();
-            const requiredCommands = exercise.expectedCommandPatterns || [];
+            // For Exercise 3, we only want to check completion on 'ls' commands
+            const mostRecentCommand = this.commandHistory[this.commandHistory.length - 1] || "";
             
-            // Check if all required command patterns are in history
-            return requiredCommands.every(pattern => {
-                const regex = new RegExp(pattern, 'i');
-                return regex.test(commandsHistory);
-            });
+            // If this isn't an 'ls' command, don't check for completion
+            if (exercise.id === 3 && !mostRecentCommand.match(/\bls\b/i)) {
+                return false;
+            }
+            
+            // Get the terminal output content
+            const terminalLines = Array.from(this.outputElement.children).map(el => el.textContent.toLowerCase());
+            
+            // Find the last command's output
+            let commandIndex = -1;
+            for (let i = terminalLines.length - 1; i >= 0; i--) {
+                if (terminalLines[i].startsWith('$ ' + mostRecentCommand.toLowerCase())) {
+                    commandIndex = i;
+                    break;
+                }
+            }
+            
+            // If we couldn't find the command line, don't proceed
+            if (commandIndex === -1) {
+                console.log("Couldn't find the most recent command in the terminal output");
+                return false;
+            }
+            
+            // Get only the output lines that follow the most recent command
+            const recentOutputLines = terminalLines.slice(commandIndex + 1);
+            
+            // Find where the next command starts (if any)
+            let nextCommandIndex = recentOutputLines.findIndex(line => line.startsWith('$ '));
+            if (nextCommandIndex === -1) {
+                // No next command, use all lines
+                nextCommandIndex = recentOutputLines.length;
+            }
+            
+            // Get just the output between this command and the next one
+            const commandOutput = recentOutputLines.slice(0, nextCommandIndex).join('\n');
+            
+            console.log("Most recent command:", mostRecentCommand);
+            console.log("Command output:", commandOutput);
+            
+            // Check if the most recent command matches the expected pattern
+            const commandPatterns = exercise.expectedCommandPatterns || [];
+            const commandMatches = commandPatterns.length === 0 || 
+                commandPatterns.some(pattern => {
+                    const regex = new RegExp(pattern, 'i');
+                    const matches = regex.test(mostRecentCommand);
+                    console.log(`Command pattern '${pattern}' matches recent command: ${matches}`);
+                    return matches;
+                });
+            
+            // Check if the output of the most recent command contains the expected pattern
+            const outputPatterns = exercise.expectedOutputPatterns || [];
+            const outputMatches = outputPatterns.length === 0 || 
+                outputPatterns.every(pattern => {
+                    const regex = new RegExp(pattern, 'i');
+                    const matches = regex.test(commandOutput);
+                    console.log(`Output pattern '${pattern}' matches command output: ${matches}`);
+                    return matches;
+                });
+            
+            // Exercise is complete if both the command and output match
+            const isComplete = commandMatches && outputMatches;
+            console.log(`Exercise completion: command matches = ${commandMatches}, output matches = ${outputMatches}, isComplete = ${isComplete}`);
+            
+            // Display success message if newly completed
+            if (isComplete && !this.exerciseCompleted) {
+                this.exerciseCompleted = true;
+                this.addOutputLine('', '');
+                this.addOutputLine('🎉 Exercise completed successfully! 🎉', 'text-success');
+            }
+            
+            return isComplete;
         } catch (error) {
             console.error('Error checking exercise completion:', error);
             return false;
