@@ -265,15 +265,22 @@
                             scrollToBottom();
                             
                             // Check for exercise completion
-                            if (currentExercise.expected_output && result.includes(currentExercise.expected_output)) {
-                                const statusElement = document.getElementById('exercise-status');
-                                if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
-                                    const successLine = document.createElement('div');
-                                    successLine.className = 'text-success mt-2 terminal-line';
-                                    successLine.textContent = 'Success! Exercise completed.';
-                                    output.appendChild(successLine);
-                                    statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
-                                    scrollToBottom();
+                            if (currentExercise.expected_command_patterns && currentExercise.expected_output_patterns) {
+                                const commandMatches = Array.from(currentExercise.expected_command_patterns)
+                                    .every(pattern => command.toLowerCase().includes(pattern.toLowerCase()));
+                                const outputMatches = Array.from(currentExercise.expected_output_patterns)
+                                    .every(pattern => result.toLowerCase().includes(pattern.toLowerCase()));
+                                    
+                                if (commandMatches && outputMatches) {
+                                    const statusElement = document.getElementById('exercise-status');
+                                    if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
+                                        const successLine = document.createElement('div');
+                                        successLine.className = 'text-success mt-2 terminal-line';
+                                        successLine.textContent = 'Success! Exercise completed.';
+                                        output.appendChild(successLine);
+                                        statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
+                                        scrollToBottom();
+                                    }
                                 }
                             }
                         }

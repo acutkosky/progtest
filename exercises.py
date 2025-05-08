@@ -1,6 +1,6 @@
 """Exercise definitions for the programming diagnostic."""
-from dataclasses import dataclass
-from typing import Any, Optional, List, Dict, Union, Tuple
+from dataclasses import dataclass, asdict
+from typing import Any, Optional, List, Dict, Union, Tuple, Set
 
 @dataclass
 class TestCase:
@@ -19,7 +19,8 @@ class Exercise:
     template: Optional[str] = None
     test_cases: Optional[List[TestCase]] = None
     commands: Optional[List[str]] = None
-    expected_output: Optional[str] = None
+    expected_command_patterns: Optional[List[str]] = None  # Patterns that should appear in the command
+    expected_output_patterns: Optional[List[str]] = None   # Patterns that should appear in the output
 
 EXERCISES = [
     Exercise(
@@ -50,9 +51,18 @@ The function should use a list comprehension to generate the squares.""",
         id=3,
         type="terminal",
         title="Basic Terminal Commands",
-        description="""List all files in the current directory and create a new file called 'test.txt'.""",
-        commands=["ls", "touch test.txt"],
-        expected_output="test.txt"
+        description="""List all files in the current directory and create a new file called 'test.txt'.
+
+Required steps:
+1. Create a new file named 'test.txt'
+2. List the contents of the current directory to verify the file was created""",
+        commands=["ls", "touch test.txt", "ls"],
+        expected_command_patterns=[
+            "ls"
+        ],
+        expected_output_patterns=[
+            "test.txt"
+        ]
     ),
     Exercise(
         id=4,
@@ -84,6 +94,143 @@ Requirements:
         test_cases=[
             TestCase(input=["sample.txt", "python"], output=3, description="Count Python occurrences")
         ]
+    ),
+    Exercise(
+        id=6,
+        type="terminal",
+        title="Working with Text Files",
+        description="""In this exercise, you'll create and manipulate a text file using basic terminal commands.
+
+Required steps:
+1. Create a file named 'names.txt' containing exactly these four names, one per line:
+   Alice
+   Bob
+   Charlie
+   David
+
+2. Display the contents of names.txt to verify it was created correctly
+3. Use grep to find and display the line containing 'Bob'
+
+Hint: You can use 'echo' with the -e flag and \\n for newlines to create the file in one command.""",
+        commands=[
+            "echo -e 'Alice\\nBob\\nCharlie\\nDavid' > names.txt",
+            "cat names.txt",
+            "grep 'Bob' names.txt"
+        ],
+        expected_command_patterns=["names.txt", "grep"],
+        expected_output_patterns=["Bob"]
+    ),
+    Exercise(
+        id=7,
+        type="terminal",
+        title="Directory Structure",
+        description="""Create and navigate a specific directory structure for a web project.
+
+Required steps:
+1. Create the following directory structure:
+   webapp/
+   ├── src/
+   │   ├── components/
+   │   └── styles/
+   └── public/
+
+2. Navigate into the components directory
+3. Verify you're in the correct location (path should end with components)
+4. List all directories to verify the structure
+
+Commands you'll need: mkdir -p, cd, pwd, ls""",
+        commands=[
+            "mkdir -p webapp/src/components webapp/src/styles webapp/public",
+            "cd webapp/src/components",
+            "pwd"
+        ],
+        expected_command_patterns=["cd", "components"],
+        expected_output_patterns=["components"]
+    ),
+    Exercise(
+        id=8,
+        type="terminal",
+        title="Script Creation and Permissions",
+        description="""Create a shell script and make it executable.
+
+Required steps:
+1. Create a file named 'greet.sh' with these exact contents:
+   #!/bin/bash
+   echo "Hello, World!"
+
+2. Display the current permissions of greet.sh
+3. Make the script executable (add +x permission)
+4. Display the new permissions to verify the change
+
+The final permissions should show the executable bit set for all users (chmod a+x).""",
+        commands=[
+            "echo -e '#!/bin/bash\\necho \"Hello, World!\"' > greet.sh",
+            "ls -l greet.sh",
+            "chmod a+x greet.sh",
+            "ls -l greet.sh"
+        ],
+        expected_command_patterns=["chmod", "greet.sh"],
+        expected_output_patterns=["x"]
+    ),
+    Exercise(
+        id=9,
+        type="terminal",
+        title="Text Processing Pipeline",
+        description="""Process a list of fruits to count duplicates using pipes.
+
+Required steps:
+1. Create a file named 'fruits.txt' with these exact contents (one fruit per line):
+   apple
+   banana
+   apple
+   cherry
+   banana
+   date
+   apple
+
+2. Use a pipeline of commands to:
+   - Sort the fruits alphabetically
+   - Count how many times each fruit appears
+   - Show only fruits that appear more than once
+
+The output should show the count followed by the fruit name.""",
+        commands=[
+            "echo -e 'apple\\nbanana\\napple\\ncherry\\nbanana\\ndate\\napple' > fruits.txt",
+            "sort fruits.txt | uniq -c | sort -nr | grep -v '^ *1 '"
+        ],
+        expected_command_patterns=["sort", "uniq", "fruits.txt"],
+        expected_output_patterns=["3", "apple", "2", "banana"]
+    ),
+    Exercise(
+        id=10,
+        type="terminal",
+        title="File Finding and Counting",
+        description="""Search for specific files and count them.
+
+Required steps:
+1. Create this directory structure with files:
+   test/
+   ├── a.txt
+   ├── b.txt
+   ├── sub1/
+   │   ├── c.txt
+   │   └── d.log
+   └── sub2/
+       ├── e.txt
+       └── f.log
+
+2. Use the find command to:
+   - Find all .txt files
+   - Count how many there are
+
+The final output should show only the number of .txt files found.""",
+        commands=[
+            "mkdir -p test/sub1 test/sub2",
+            "touch test/a.txt test/b.txt test/sub1/c.txt test/sub1/d.log test/sub2/e.txt test/sub2/f.log",
+            "find test -name '*.txt' | wc -l"
+        ],
+        expected_command_patterns=["find", "txt"],
+        expected_output_patterns=["4"]
     )
 ]
 
