@@ -300,6 +300,17 @@ sys.stdout = sys.__stdout__
         // Initialize Pyodide for terminal
         initPyodide().then((success) => {
             if (success) {
+                // Initialize the filesystem
+                pyodide.runPython(`
+import os
+import sys
+
+# Create a virtual filesystem directory for our terminal
+if not os.path.exists('/home'):
+    os.makedirs('/home')
+os.chdir('/home')
+                `);
+                
                 output.innerHTML = '';
                 const initLine = document.createElement('div');
                 initLine.className = 'text-success terminal-line';
