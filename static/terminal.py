@@ -296,7 +296,15 @@ def execute_single_command(command: Command) -> None:
         elif command.cmd == 'rmdir':
             os.rmdir(command.args[0])
         elif command.cmd == 'touch':
-            pathlib.Path(command.args[0]).touch()
+            if not command.args:
+                print("touch: missing file operand")
+                return
+            
+            for file in command.args:
+                try:
+                    pathlib.Path(file).touch()
+                except OSError as e:
+                    print(f"touch: cannot touch '{file}': {str(e)}", file=sys.stderr)
         elif command.cmd == 'cat':
             if not command.args:
                 # If no args, cat reads from stdin
@@ -468,6 +476,77 @@ def execute_single_command(command: Command) -> None:
                     if count_chars:
                         print(f"{total_chars:>7}", end='')
                     print(" total")
+        elif command.cmd == 'find':
+            # Parse options
+            if len(command.args) < 1:
+                print("find: missing path operand")
+                return
+                
+            start_path = '.'  # Default to current directory
+            name_pattern = None
+            file_type = None  # 'f' for regular files, 'd' for directories
+            
+            # Parse arguments
+            i = 0
+            while i < len(command.args):
+                if command.args[i] == '-name':
+                    if i + 1 >= len(command.args):
+                        print("find: missing argument to '-name'")
+                        return
+                    name_pattern = command.args[i + 1]
+                    # Remove quotes if present
+                    if (name_pattern.startswith("'") and name_pattern.endswith("'")) or \
+                       (name_pattern.startswith('"') and name_pattern.endswith('"')):
+                        name_pattern = name_pattern[1:-1]
+                    i += 2
+                elif command.args[i] == '-type':
+                    if i + 1 >= len(command.args):
+                        print("find: missing argument to '-type'")
+                        return
+                    file_type = command.args[i + 1]
+                    if file_type not in ['f', 'd']:
+                        print(f"find: Unknown argument to -type: {file_type}")
+                        return
+                    i += 2
+                else:
+                    start_path = command.args[i]
+                    i += 1
+            
+            # Walk directory tree
+            try:
+                found_files = []
+                for root, dirs, files in os.walk(start_path):
+                    if file_type == 'd':
+                        # Handle directory matches
+                        if name_pattern:
+                            matching_dirs = fnmatch.filter(dirs, name_pattern)
+                            for dir in matching_dirs:
+                                found_path = os.path.join(root, dir)
+                                found_files.append(found_path)
+                                print(found_path)
+                        else:
+                            print(root)
+                            for dir in dirs:
+                                found_path = os.path.join(root, dir)
+                                found_files.append(found_path)
+                                print(found_path)
+                    else:  # file_type == 'f' or None
+                        # Handle file matches (default behavior is to match files)
+                        if name_pattern:
+                            matching_files = fnmatch.filter(files, name_pattern)
+                            for file in matching_files:
+                                found_path = os.path.join(root, file)
+                                found_files.append(found_path)
+                                print(found_path)
+                        else:
+                            for file in files:
+                                found_path = os.path.join(root, file)
+                                found_files.append(found_path)
+                                print(found_path)
+                return found_files  # Return list for piping
+            except OSError as e:
+                print(f"find: '{start_path}': {str(e)}", file=sys.stderr)
+                return []
         else:
             print(f"{command.cmd}: command not found", file=sys.stderr)
             

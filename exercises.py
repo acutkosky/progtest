@@ -246,7 +246,7 @@ Required steps:
        └── f.log</pre>
 <pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Use the find command to:
-   - Find all .txt files
+   - Find all .txt files (you can start from either the 'test' directory or '.')
    - Count how many there are
 
 The final output should show only the number of .txt files found.</pre>""",
