@@ -104,8 +104,27 @@ class TerminalInterface {
 
             return true;
         } catch (error) {
+            // Instead of showing the Python error, display a more user-friendly error
             console.error('Command execution error:', error);
-            this.addOutputLine(`Error executing command: ${error}`, 'text-danger');
+            
+            // Extract the command name from the input
+            const cmdName = command.trim().split(/\s+/)[0];
+            
+            // Format a Unix-like error message based on the error type
+            if (error.message && error.message.includes('No such file or directory')) {
+                // Extract the filename if possible
+                const args = command.trim().split(/\s+/).slice(1);
+                const filename = args.find(arg => !arg.startsWith('-')) || 'file';
+                this.addOutputLine(`${cmdName}: ${filename}: No such file or directory`, 'text-danger');
+            } else if (error.message && error.message.includes('Permission denied')) {
+                this.addOutputLine(`${cmdName}: Permission denied`, 'text-danger');
+            } else if (error.message && error.message.includes('command not found')) {
+                this.addOutputLine(`${cmdName}: command not found`, 'text-danger');
+            } else {
+                // Generic error message that mimics Unix-style errors
+                this.addOutputLine(`${cmdName}: error: ${error.message || 'Command failed'}`, 'text-danger');
+            }
+            
             return false;
         }
     }
@@ -224,6 +243,58 @@ class TerminalInterface {
             const command = this.inputElement.value;
             this.executeCommand(command);
             this.inputElement.value = '';
+        }
+    }
+
+    // Set up the terminal for specific exercises
+    setupExercise(exercise) {
+        if (!exercise || !this.pyodideReady) {
+            return false;
+        }
+
+        try {
+            // Exercise-specific setup
+            switch (exercise.id) {
+                case 9:
+                    // Text Processing Pipeline exercise - Create words.txt automatically
+                    console.log("Setting up Exercise 9 - Creating words.txt");
+                    this.addOutputLine("Creating words.txt for this exercise...", "text-info");
+                    
+                    // Create the file directly using Python with explicit list for better control
+                    const pythonCode = `
+# Define the words as a list to ensure proper formatting
+words = [
+    "apple",
+    "banana",
+    "apple",
+    "cherry",
+    "banana",
+    "apple",
+    "date",
+    "cherry"
+]
+
+# Write each word on its own line with proper line endings
+with open('words.txt', 'w') as f:
+    for i, word in enumerate(words):
+        f.write(word)
+        # Ensure every line has a newline, even the last one
+        f.write('\\n')
+`;
+                    pyodide.runPython(pythonCode);
+                    
+                    this.addOutputLine("File words.txt has been created. You can proceed with the exercise.", "text-success");
+                    break;
+                
+                default:
+                    // No special setup for other exercises
+                    break;
+            }
+            return true;
+        } catch (error) {
+            console.error('Error setting up exercise:', error);
+            this.addOutputLine(`Error setting up exercise: ${error}`, 'text-danger');
+            return false;
         }
     }
 }

@@ -318,8 +318,15 @@ def execute_single_command(command: Command) -> None:
                         break
             else:
                 for file in command.args:
-                    with open(file, 'r') as f:
-                        print(f.read(), end='')
+                    try:
+                        with open(file, 'r') as f:
+                            print(f.read(), end='')
+                    except FileNotFoundError:
+                        print(f"cat: {file}: No such file or directory", file=sys.stderr)
+                    except PermissionError:
+                        print(f"cat: {file}: Permission denied", file=sys.stderr)
+                    except Exception as e:
+                        print(f"cat: {file}: {str(e)}", file=sys.stderr)
         elif command.cmd == 'echo':
             # Join arguments with a single space
             content = ' '.join(command.args)
@@ -345,14 +352,21 @@ def execute_single_command(command: Command) -> None:
                         sys.stdout.write(line)
             else:
                 for file in files:
-                    with open(file, 'r') as f:
-                        for i, line in enumerate(f, 1):
-                            matches = bool(regex.search(line))
-                            if matches != invert_match:  # XOR with invert_match
-                                if len(files) > 1:
-                                    print(f"{file}:{i}:{line}", end='')
-                                else:
-                                    print(line, end='')
+                    try:
+                        with open(file, 'r') as f:
+                            for i, line in enumerate(f, 1):
+                                matches = bool(regex.search(line))
+                                if matches != invert_match:  # XOR with invert_match
+                                    if len(files) > 1:
+                                        print(f"{file}:{i}:{line}", end='')
+                                    else:
+                                        print(line, end='')
+                    except FileNotFoundError:
+                        print(f"grep: {file}: No such file or directory", file=sys.stderr)
+                    except PermissionError:
+                        print(f"grep: {file}: Permission denied", file=sys.stderr)
+                    except Exception as e:
+                        print(f"grep: {file}: {str(e)}", file=sys.stderr)
         elif command.cmd == 'sort':
             # Parse options
             numeric = '-n' in command.args
@@ -360,14 +374,37 @@ def execute_single_command(command: Command) -> None:
             
             # Get input source (file or stdin)
             files = [arg for arg in command.args if not arg.startswith('-')]
-            lines = []
+            raw_lines = []
             
             if not files:  # Read from stdin
-                lines = sys.stdin.readlines()
+                # Read and normalize input
+                raw_lines = sys.stdin.readlines()
             else:
                 for file in files:
-                    with open(file, 'r') as f:
-                        lines.extend(f.readlines())
+                    try:
+                        with open(file, 'r') as f:
+                            raw_lines.extend(f.readlines())
+                    except FileNotFoundError:
+                        print(f"sort: {file}: No such file or directory", file=sys.stderr)
+                        continue
+                    except PermissionError:
+                        print(f"sort: {file}: Permission denied", file=sys.stderr)
+                        continue
+                    except Exception as e:
+                        print(f"sort: {file}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If we have no lines after handling errors, return
+            if not raw_lines:
+                return
+            
+            # Normalize lines - ensure each line ends with a newline
+            # This handles the case where a file's last line doesn't have a newline
+            lines = []
+            for line in raw_lines:
+                if not line.endswith('\n'):
+                    line += '\n'
+                lines.append(line)
             
             # Sort the lines
             if numeric:
@@ -397,8 +434,18 @@ def execute_single_command(command: Command) -> None:
             if not files:  # Read from stdin
                 lines = sys.stdin.readlines()
             else:
-                with open(files[0], 'r') as f:
-                    lines = f.readlines()
+                try:
+                    with open(files[0], 'r') as f:
+                        lines = f.readlines()
+                except FileNotFoundError:
+                    print(f"uniq: {files[0]}: No such file or directory", file=sys.stderr)
+                    return
+                except PermissionError:
+                    print(f"uniq: {files[0]}: Permission denied", file=sys.stderr)
+                    return
+                except Exception as e:
+                    print(f"uniq: {files[0]}: {str(e)}", file=sys.stderr)
+                    return
             
             # Process lines
             if not lines:
@@ -620,6 +667,15 @@ def execute_command(command_str: str) -> str:
         # Combine output and errors in the right order
         return output + errors
         
+    except FileNotFoundError as e:
+        # Extract the filename if possible
+        filename = str(e).split("'")[1] if "'" in str(e) else "file"
+        return f"{commands[0].cmd}: {filename}: No such file or directory"
+    except PermissionError:
+        return f"{commands[0].cmd}: Permission denied"
+    except Exception as e:
+        # For other errors, still allow the traceback to propagate for debugging
+        return f"Error: {str(e)}"
     finally:
         # Restore stderr
         sys.stderr = original_stderr

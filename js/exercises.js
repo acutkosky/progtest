@@ -176,8 +176,7 @@ The final permissions should show the executable bit set for all users (chmod a+
         summary: "Process text using sort, uniq, and pipes to count duplicates.",
         description: `<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Use text processing commands to analyze the frequency of words.
 
-Required steps:
-1. Create a file named 'words.txt' containing the following words, one per line:</pre>
+A file named 'words.txt' has been created for you with the following contents:</pre>
 <pre class="ascii-art">   apple
    banana
    apple
@@ -187,12 +186,12 @@ Required steps:
    date
    cherry</pre>
 <pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
-2. Use a pipeline of commands (sort | uniq -c) to count the occurrences of each word
-3. The output should show the word frequency in ascending order
+Your task:
+1. Use a pipeline of commands (sort | uniq -c) to count the occurrences of each word
+2. The output should show the word frequency in ascending order
 
 Expected output should show apple appears 3 times, banana 2 times, cherry 2 times, and date 1 time.</pre>`,
         commands: [
-            "echo -e 'apple\\nbanana\\napple\\ncherry\\nbanana\\napple\\ndate\\ncherry' > words.txt",
             "sort words.txt | uniq -c | sort -n"
         ],
         expectedCommandPatterns: [

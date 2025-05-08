@@ -79,6 +79,19 @@
             margin-top: 20px;
             font-size: 18px;
         }
+        /* CodeMirror sizing styles */
+        .CodeMirror {
+            height: 300px;
+            border: 1px solid #ddd;
+            font-family: 'Fira Code', monospace;
+        }
+        #output {
+            font-family: 'Fira Code', monospace;
+        }
+        #python-exercise .row {
+            margin-right: 0;
+            margin-left: 0;
+        }
     </style>
 </head>
 <body>
@@ -120,16 +133,22 @@
                         
                         <!-- Python exercise elements -->
                         <div id="python-exercise" style="display: none;">
-                            <div class="mb-3">
-                                <label for="code-editor" class="form-label">Your Code:</label>
-                                <textarea id="code-editor"></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <button id="run-button" class="btn btn-primary">Run Code</button>
-                            </div>
-                            <div class="mb-3">
-                                <label for="output" class="form-label">Output:</label>
-                                <pre id="output" class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;">Environment initializing...</pre>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="code-editor" class="form-label">Your Code:</label>
+                                        <textarea id="code-editor"></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <button id="run-button" class="btn btn-primary">Run Code</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="output" class="form-label">Output:</label>
+                                        <pre id="output" class="border p-3 bg-light" style="min-height: 300px; height: 100%; overflow-y: auto;">Environment initializing...</pre>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -267,7 +286,8 @@
                                     indentWithTabs: false,
                                     lineWrapping: true,
                                     matchBrackets: true,
-                                    autoCloseBrackets: true
+                                    autoCloseBrackets: true,
+                                    viewportMargin: Infinity
                                 });
                                 
                                 // Initialize Python runner with our pre-initialized Pyodide
@@ -313,6 +333,9 @@
                                     // Store in window
                                     window.terminal = terminal;
                                     window.currentExercise = exercise;
+                                    
+                                    // Set up the exercise-specific environment
+                                    terminal.setupExercise(exercise);
                                     
                                     // Set up status callback
                                     terminal.setStatusCallback((command) => {
