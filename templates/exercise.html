@@ -107,7 +107,6 @@
     let pyodide = null;
     let editor = null;
     let currentExercise = {{ exercise|tojson|safe }};
-    let currentDir = '/';
 
     // Initialize CodeMirror
     document.addEventListener('DOMContentLoaded', function() {
@@ -135,13 +134,13 @@
             
             // Only update output element for Python exercises
             if (currentExercise.type === 'python') {
-                document.getElementById('output').textContent = 'Pyodide loaded successfully!';
+                document.getElementById('output').textContent = 'Environment ready. Click "Run Code" to test your solution.';
             }
             return true;
         } catch (error) {
             // Handle error differently based on exercise type
             if (currentExercise.type === 'python') {
-                document.getElementById('output').textContent = 'Error loading Pyodide: ' + error;
+                document.getElementById('output').textContent = 'Error loading Python environment: ' + error;
             } else {
                 console.error('Error loading Pyodide:', error);
             }
@@ -152,129 +151,43 @@
     // Run Python code
     async function runPythonCode() {
         if (!pyodide) {
-            document.getElementById('output').textContent = 'Pyodide is still loading...';
+            document.getElementById('output').textContent = 'Python environment is still loading...';
             return;
         }
 
         const code = editor.getValue();
-        let output = '';
-        let passedTests = 0;
-        let totalTests = currentExercise.test_cases.length;
-
+        const outputElement = document.getElementById('output');
+        outputElement.textContent = 'Running tests...';
+        
         try {
-            // Run the code first to define any functions
-            await pyodide.runPythonAsync(code);
+            // Submit code to server for testing
+            const response = await fetch('/submit/python', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    exercise_id: currentExercise.id,
+                    code: code
+                })
+            });
             
-            // Run test cases
-            for (const testCase of currentExercise.test_cases) {
-                try {
-                    let result;
-                    if (testCase.input === null) {
-                        // For exercises without input parameters
-                        const outputStr = JSON.stringify(testCase.output);
-                        // Extract function name from the code
-                        const functionMatch = code.match(/def\s+(\w+)\s*\(/);
-                        const functionName = functionMatch ? functionMatch[1] : '';
-                        const testCode = `
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-
-import json
-expected = json.loads('${outputStr}')
-result = ${functionName}()
-print(f"Test case: Function call")
-print(f"Expected: {expected}")
-print(f"Got: {result}")
-# Convert both to tuples for comparison to handle any sequence type
-passed = tuple(result) == tuple(expected)
-print(f"Passed: {passed}")
-print("---")
-
-output = sys.stdout.getvalue()
-sys.stdout = sys.__stdout__
-(passed, output)
-`;
-                        const [testPassed, testOutput] = await pyodide.runPythonAsync(testCode);
-                        output += testOutput;
-                        if (testPassed) {
-                            passedTests++;
-                        }
-                    } else {
-                        // For exercises with input parameters
-                        const inputStr = JSON.stringify(testCase.input);
-                        const outputStr = JSON.stringify(testCase.output);
-                        // Extract function name from the code
-                        const functionMatch = code.match(/def\s+(\w+)\s*\(/);
-                        const functionName = functionMatch ? functionMatch[1] : '';
-                        const testCode = `
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-
-import json
-input_data = json.loads('${inputStr}')
-expected = json.loads('${outputStr}')
-
-# Special handling for exercise 5 (file processing)
-if '${functionName}' == 'count_word_occurrences':
-    # Create sample.txt with test content
-    with open('sample.txt', 'w') as f:
-        f.write('''Python is a great language
-I love PYTHON programming
-python makes coding fun
-''')
-    
-    # Display file contents for clarity
-    print("Test file contents:")
-    print("------------------")
-    with open('sample.txt', 'r') as f:
-        print(f.read())
-    print("------------------")
-
-result = ${functionName}(*input_data)
-print(f"Test case: {input_data}")
-print(f"Expected: {expected}")
-print(f"Got: {result}")
-# Handle different types of results
-if isinstance(result, dict) and isinstance(expected, dict):
-    passed = result == expected  # Dictionary comparison is order-independent
-elif isinstance(result, (list, tuple)) and isinstance(expected, (list, tuple)):
-    passed = tuple(result) == tuple(expected)  # Sequence comparison
-else:
-    passed = result == expected  # Direct comparison for other types
-print(f"Passed: {passed}")
-print("---")
-
-output = sys.stdout.getvalue()
-sys.stdout = sys.__stdout__
-(passed, output)
-`;
-                        const [testPassed, testOutput] = await pyodide.runPythonAsync(testCode);
-                        output += testOutput;
-                        if (testPassed) {
-                            passedTests++;
-                        }
-                    }
-                } catch (error) {
-                    output += `Error in test case: ${error}\n`;
+            const result = await response.json();
+            
+            if (result.success) {
+                outputElement.textContent = result.output;
+                if (result.passed) {
+                    outputElement.style.color = '#28a745';  // green for success
+                } else {
+                    outputElement.style.color = '#dc3545';  // red for failure
                 }
-            }
-            
-            // Add test summary
-            output += `\nPassed ${passedTests} out of ${totalTests} tests\n`;
-            
-            // Color the output based on test results
-            const outputElement = document.getElementById('output');
-            outputElement.textContent = output;
-            if (passedTests === totalTests) {
-                outputElement.style.color = '#28a745';
             } else {
+                outputElement.textContent = 'Error: ' + result.error;
                 outputElement.style.color = '#dc3545';
             }
         } catch (error) {
-            document.getElementById('output').textContent = 'Error: ' + error;
-            document.getElementById('output').style.color = '#dc3545';
+            outputElement.textContent = 'Error submitting code: ' + error;
+            outputElement.style.color = '#dc3545';
         }
     }
 
@@ -286,118 +199,77 @@ sys.stdout = sys.__stdout__
         const prompt = document.getElementById('terminal-prompt');
         let commandHistory = [];
         let historyIndex = -1;
-        let currentDir = '/';
 
         function scrollToBottom() {
-            // Ensure we scroll to the very bottom
             output.scrollTop = output.scrollHeight;
-            // Sometimes a timeout helps ensure the scroll happens after rendering
             setTimeout(() => {
                 output.scrollTop = output.scrollHeight;
             }, 10);
         }
 
-        // Initialize Pyodide for terminal
-        initPyodide().then((success) => {
-            if (success) {
-                // Initialize the filesystem
-                pyodide.runPython(`
-import os
-import sys
-
-# Create a virtual filesystem directory for our terminal
-if not os.path.exists('/home'):
-    os.makedirs('/home')
-os.chdir('/home')
-                `);
-                
-                output.innerHTML = '';
-                const initLine = document.createElement('div');
-                initLine.className = 'text-success terminal-line';
-                initLine.textContent = 'Terminal initialized. You can start entering commands.';
-                output.appendChild(initLine);
-                scrollToBottom();
-            } else {
-                output.innerHTML = '';
-                const errorLine = document.createElement('div');
-                errorLine.className = 'text-danger terminal-line';
-                errorLine.textContent = 'Failed to initialize terminal. Please refresh the page.';
-                output.appendChild(errorLine);
-                scrollToBottom();
-            }
-        });
+        // Initialize terminal
+        output.innerHTML = '';
+        const initLine = document.createElement('div');
+        initLine.className = 'text-success terminal-line';
+        initLine.textContent = 'Terminal ready. Enter commands to begin.';
+        output.appendChild(initLine);
+        scrollToBottom();
 
         // Handle command submission
         input.addEventListener('keypress', async function(e) {
             if (e.key === 'Enter') {
                 const command = input.value.trim();
                 if (command) {
-                    // Add command to history
                     commandHistory.push(command);
                     historyIndex = commandHistory.length;
-                    
-                    // Clear input
                     input.value = '';
 
-                    // Add command line to output
                     const commandLine = document.createElement('div');
                     commandLine.className = 'text-light terminal-line';
                     commandLine.textContent = `$ ${command}`;
                     output.appendChild(commandLine);
-                    
-                    // Ensure prompt is visible
                     scrollToBottom();
                     
-                    // Execute command
                     try {
-                        // Load the Python terminal code if not already loaded
-                        if (!window.terminalPyCode) {
-                            const response = await fetch('/static/terminal.py');
-                            window.terminalPyCode = await response.text();
-                            await pyodide.runPythonAsync(window.terminalPyCode);
-                        }
-
-                        // Send the entire command to Python for processing
-                        const result = await pyodide.runPythonAsync(`
-# Execute the command and get output
-output = execute_command(${JSON.stringify(command)})
-output  # Return the output to JavaScript
-                        `);
+                        const response = await fetch('/submit/terminal', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ command })
+                        });
                         
-                        if (result) {
-                            // Add result to output
-                            const resultLines = result.split('\n');
-                            // Handle all lines, including empty ones, except the last one if it's empty
-                            // (because split('\n') on a string ending with \n creates an empty last element)
-                            for (let i = 0; i < resultLines.length; i++) {
-                                // Skip the last empty line as it's an artifact of the trailing newline
-                                if (i === resultLines.length - 1 && resultLines[i] === '') {
-                                    continue;
-                                }
+                        const result = await response.json();
+                        
+                        if (result.success && result.output) {
+                            const lines = result.output.split('\n');
+                            for (const line of lines) {
                                 const resultLine = document.createElement('div');
                                 resultLine.className = 'text-light terminal-line';
-                                resultLine.textContent = resultLines[i];
+                                resultLine.textContent = line;
                                 output.appendChild(resultLine);
                             }
                             scrollToBottom();
                             
-                            // Check if this is a terminal exercise with expected output
-                            if (currentExercise.type === 'terminal' && currentExercise.expected_output) {
+                            // Check for exercise completion
+                            if (currentExercise.expected_output && 
+                                result.output.includes(currentExercise.expected_output)) {
                                 const statusElement = document.getElementById('exercise-status');
-                                // Only update status if not already completed
                                 if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
-                                    if (result.includes(currentExercise.expected_output)) {
-                                        const successLine = document.createElement('div');
-                                        successLine.className = 'text-success mt-2 terminal-line';
-                                        successLine.textContent = 'Success! You\'ve completed the exercise.';
-                                        output.appendChild(successLine);
-                                        statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
-                                        scrollToBottom();
-                                    } else {
-                                        statusElement.innerHTML = '<span class="badge bg-warning">In Progress</span>';
-                                    }
+                                    const successLine = document.createElement('div');
+                                    successLine.className = 'text-success mt-2 terminal-line';
+                                    successLine.textContent = 'Success! Exercise completed.';
+                                    output.appendChild(successLine);
+                                    statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
+                                    scrollToBottom();
                                 }
                             }
+                        } else if (!result.success) {
+                            const errorLine = document.createElement('div');
+                            errorLine.className = 'text-danger terminal-line';
+                            errorLine.textContent = result.error;
+                            output.appendChild(errorLine);
+                            scrollToBottom();
                         }
                     } catch (error) {
                         const errorLine = document.createElement('div');
