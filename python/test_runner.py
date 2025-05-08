@@ -138,6 +138,15 @@ def run_tests(code: str, test_cases: List[Any]) -> List[TestResult]:
             else:
                 raise ValueError("No function defined in code")
             
+            # Special handling for exercise 5 (file processing)
+            # Create sample.txt with test content before running the test
+            if function.__name__ == 'count_word_occurrences':
+                with open('sample.txt', 'w') as f:
+                    f.write('''Python is a great language
+I love PYTHON programming
+python makes coding fun
+Java is another language''')
+            
             # Call the function with the test inputs
             if tc.input is None:
                 result = function()
@@ -172,6 +181,13 @@ def run_tests(code: str, test_cases: List[Any]) -> List[TestResult]:
         finally:
             # Restore stdout
             sys.stdout = old_stdout
+            
+            # Clean up sample.txt if it was created
+            try:
+                if function.__name__ == 'count_word_occurrences' and os.path.exists('sample.txt'):
+                    os.remove('sample.txt')
+            except:
+                pass
     
     return results
 
