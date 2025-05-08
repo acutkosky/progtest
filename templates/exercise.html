@@ -5,17 +5,24 @@
     #terminal {
         font-family: 'Courier New', monospace;
         height: 400px;
-        overflow-y: auto;
         display: flex;
         flex-direction: column;
+        user-select: text;
     }
     #terminal-output {
         flex-grow: 1;
         padding: 12px;
         white-space: pre-wrap;
         word-break: break-word;
-        display: flex;
-        flex-direction: column-reverse;
+        overflow-y: auto;
+    }
+    #terminal-output div {
+        user-select: text;
+        cursor: text;
+    }
+    #terminal-output div::selection {
+        background-color: rgba(255, 255, 255, 0.3);
+        color: #fff;
     }
     #terminal-prompt {
         border-top: 1px solid #444;
@@ -30,8 +37,7 @@
         box-shadow: none !important;
     }
     .terminal-line {
-        margin-top: 5px;
-        margin-bottom: 0;
+        margin-bottom: 5px;
     }
 </style>
 
@@ -277,16 +283,29 @@ sys.stdout = sys.__stdout__
         let currentDir = '/';
 
         function scrollToBottom() {
-            terminal.scrollTop = terminal.scrollHeight;
+            // Ensure we scroll to the very bottom
+            output.scrollTop = output.scrollHeight;
+            // Sometimes a timeout helps ensure the scroll happens after rendering
+            setTimeout(() => {
+                output.scrollTop = output.scrollHeight;
+            }, 10);
         }
 
         // Initialize Pyodide for terminal
         initPyodide().then((success) => {
             if (success) {
-                output.innerHTML = `<div class="text-success terminal-line">Terminal initialized. You can start entering commands.</div>`;
+                output.innerHTML = '';
+                const initLine = document.createElement('div');
+                initLine.className = 'text-success terminal-line';
+                initLine.textContent = 'Terminal initialized. You can start entering commands.';
+                output.appendChild(initLine);
                 scrollToBottom();
             } else {
-                output.innerHTML = `<div class="text-danger terminal-line">Failed to initialize terminal. Please refresh the page.</div>`;
+                output.innerHTML = '';
+                const errorLine = document.createElement('div');
+                errorLine.className = 'text-danger terminal-line';
+                errorLine.textContent = 'Failed to initialize terminal. Please refresh the page.';
+                output.appendChild(errorLine);
                 scrollToBottom();
             }
         });
@@ -300,12 +319,14 @@ sys.stdout = sys.__stdout__
                     commandHistory.push(command);
                     historyIndex = commandHistory.length;
                     
-                    // Display command (directly in the output div)
-                    const newOutput = `<div class="text-light terminal-line">$ ${command}</div>`;
-                    output.innerHTML = newOutput + output.innerHTML;
-                    
                     // Clear input
                     input.value = '';
+
+                    // Add command line to output
+                    const commandLine = document.createElement('div');
+                    commandLine.className = 'text-light terminal-line';
+                    commandLine.textContent = `$ ${command}`;
+                    output.appendChild(commandLine);
                     
                     // Ensure prompt is visible
                     scrollToBottom();
@@ -322,6 +343,9 @@ sys.stdout = sys.__stdout__
                             args.splice(redirectionIndex, 2);
                         }
 
+                        // Safely serialize the command for passing to Python
+                        const serializedCommand = JSON.stringify(command).replace(/\\/g, '\\\\');
+
                         // Execute command with captured output
                         const result = await pyodide.runPythonAsync(`
 import sys
@@ -333,6 +357,7 @@ import datetime
 import glob
 import fnmatch
 import pathlib
+import json
 
 sys.stdout = StringIO()
 try:
@@ -342,6 +367,9 @@ try:
     
     # Handle redirection
     output_file = ${outputFile ? `'${outputFile}'` : 'None'}
+    
+    # Get original command safely via JSON deserialization
+    original_command = json.loads('''${serializedCommand}''')
     
     # Execute command
     if cmd == 'cd':
@@ -406,21 +434,43 @@ try:
         with open(args[0], 'r') as f:
             print(f.read())
     elif cmd == 'echo':
-        # Process quotes in arguments
-        processed_args = []
-        for arg in args:
-            # Remove surrounding quotes if they exist
-            if (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'")):
-                processed_args.append(arg[1:-1])
+        # Get the original command to handle quotes properly
+        if original_command.startswith("echo "):
+            echo_content = original_command[5:]
+            
+            # Handle redirection separately
+            output_parts = echo_content.split(" > ", 1)
+            content = output_parts[0].strip()
+            redirect_file = output_parts[1].strip() if len(output_parts) > 1 else None
+            
+            # Evaluate the string content like a shell would
+            try:
+                # Use Python's ast.literal_eval to safely evaluate the string
+                import ast
+                if content.startswith('"') and content.endswith('"'):
+                    # Remove outer quotes and evaluate
+                    inner_content = content[1:-1]
+                    # Replace escaped quotes with actual quotes
+                    evaluated_content = inner_content.encode('utf-8').decode('unicode-escape')
+                    content = evaluated_content
+            except:
+                # If evaluation fails, use the content as-is
+                pass
+            
+            # Handle output
+            if redirect_file:
+                with open(redirect_file, 'w') as f:
+                    f.write(content)
             else:
-                processed_args.append(arg)
-        
-        content = ' '.join(processed_args)
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write(content)
+                print(content)
         else:
-            print(content)
+            # Fallback for edge cases
+            content = ' '.join(args)
+            if output_file:
+                with open(output_file, 'w') as f:
+                    f.write(content)
+            else:
+                print(content)
     elif cmd == 'find':
         start_dir = '.' if not args else args[0]
         pattern = '*' if len(args) <= 1 else args[1]
@@ -483,9 +533,16 @@ output
                         `);
                         
                         if (result) {
-                            // Insert result before other output
-                            const resultHtml = `<div class="text-light terminal-line">${result}</div>`;
-                            output.innerHTML = resultHtml + output.innerHTML;
+                            // Add result to output
+                            const resultLines = result.split('\n');
+                            for (const line of resultLines) {
+                                if (line.trim()) {
+                                    const resultLine = document.createElement('div');
+                                    resultLine.className = 'text-light terminal-line';
+                                    resultLine.textContent = line;
+                                    output.appendChild(resultLine);
+                                }
+                            }
                             scrollToBottom();
                             
                             // Check if this is a terminal exercise with expected output
@@ -494,8 +551,10 @@ output
                                 // Only update status if not already completed
                                 if (statusElement.innerHTML !== '<span class="badge bg-success">Completed</span>') {
                                     if (result.includes(currentExercise.expected_output)) {
-                                        const successHtml = `<div class="text-success mt-2 terminal-line">Success! You've completed the exercise.</div>`;
-                                        output.innerHTML = successHtml + output.innerHTML;
+                                        const successLine = document.createElement('div');
+                                        successLine.className = 'text-success mt-2 terminal-line';
+                                        successLine.textContent = 'Success! You\'ve completed the exercise.';
+                                        output.appendChild(successLine);
                                         statusElement.innerHTML = '<span class="badge bg-success">Completed</span>';
                                         scrollToBottom();
                                     } else {
@@ -505,8 +564,10 @@ output
                             }
                         }
                     } catch (error) {
-                        const errorHtml = `<div class="text-danger terminal-line">Error: ${error}</div>`;
-                        output.innerHTML = errorHtml + output.innerHTML;
+                        const errorLine = document.createElement('div');
+                        errorLine.className = 'text-danger terminal-line';
+                        errorLine.textContent = `Error: ${error}`;
+                        output.appendChild(errorLine);
                         scrollToBottom();
                     }
                 }
