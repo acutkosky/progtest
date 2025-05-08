@@ -363,7 +363,21 @@ sys.stdout = StringIO()
 try:
     # Parse command and arguments
     cmd = '${cmd}'
-    args = ${JSON.stringify(args)}
+    raw_args = ${JSON.stringify(args)}
+    
+    # Process escaped characters in arguments
+    def process_arg(arg):
+        try:
+            # Remove outer quotes if present
+            if arg.startswith('"') and arg.endswith('"'):
+                arg = arg[1:-1]
+            # Process escaped characters
+            return arg.encode('utf-8').decode('unicode-escape')
+        except:
+            return arg
+    
+    # Process all arguments
+    args = [process_arg(arg) for arg in raw_args]
     
     # Handle redirection
     output_file = ${outputFile ? `'${outputFile}'` : 'None'}
@@ -440,22 +454,8 @@ try:
             
             # Handle redirection separately
             output_parts = echo_content.split(" > ", 1)
-            content = output_parts[0].strip()
+            content = ' '.join(args)  # Use the pre-processed args
             redirect_file = output_parts[1].strip() if len(output_parts) > 1 else None
-            
-            # Evaluate the string content like a shell would
-            try:
-                # Use Python's ast.literal_eval to safely evaluate the string
-                import ast
-                if content.startswith('"') and content.endswith('"'):
-                    # Remove outer quotes and evaluate
-                    inner_content = content[1:-1]
-                    # Replace escaped quotes with actual quotes
-                    evaluated_content = inner_content.encode('utf-8').decode('unicode-escape')
-                    content = evaluated_content
-            except:
-                # If evaluation fails, use the content as-is
-                pass
             
             # Handle output
             if redirect_file:
