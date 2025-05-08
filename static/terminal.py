@@ -10,6 +10,7 @@ import fnmatch
 import pathlib
 import json
 import shlex  # For proper shell-like argument parsing
+import re
 
 
 def process_arg(arg):
@@ -316,19 +317,30 @@ def execute_single_command(command: Command) -> None:
             content = ' '.join(command.args)
             print(content)
         elif command.cmd == 'grep':
-            pattern = command.args[0]
-            files = command.args[1:] if len(command.args) > 1 else ['-']
+            # Parse options and get pattern
+            invert_match = '-v' in command.args
+            args = [arg for arg in command.args if not arg.startswith('-')]
+            pattern = args[0] if args else ''
+            files = args[1:] if len(args) > 1 else ['-']
+            
+            try:
+                regex = re.compile(pattern)
+            except re.error:
+                print(f"grep: invalid pattern: {pattern}", file=sys.stderr)
+                return
             
             if files == ['-']:
                 # Read from stdin
                 for line in sys.stdin:
-                    if pattern in line:
+                    matches = bool(regex.search(line))
+                    if matches != invert_match:  # XOR with invert_match
                         sys.stdout.write(line)
             else:
                 for file in files:
                     with open(file, 'r') as f:
                         for i, line in enumerate(f, 1):
-                            if pattern in line:
+                            matches = bool(regex.search(line))
+                            if matches != invert_match:  # XOR with invert_match
                                 if len(files) > 1:
                                     print(f"{file}:{i}:{line}", end='')
                                 else:

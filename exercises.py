@@ -221,7 +221,10 @@ The output should show the count followed by the fruit name.</pre>""",
             "sort fruits.txt | uniq -c | sort -nr | grep -v '^ *1 '"
         ],
         expected_command_patterns=["sort", "uniq", "fruits.txt"],
-        expected_output_patterns=["3", "apple", "2", "banana"]
+        expected_output_patterns=[
+            "\\s*3\\s+apple",  # Match "3 apple" with flexible spacing
+            "\\s*2\\s+banana"  # Match "2 banana" with flexible spacing
+        ]
     ),
     Exercise(
         id=10,
