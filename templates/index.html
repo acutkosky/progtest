@@ -14,7 +14,7 @@
         <div class="card h-100">
             <div class="card-body">
                 <h5 class="card-title">{{ exercise.title }}</h5>
-                <p class="card-text">{{ exercise.description }}</p>
+                <p class="card-text">{{ exercise.summary }}</p>
                 <a href="{{ url_for('exercise', exercise_id=exercise.id) }}" class="btn btn-primary">Start Exercise</a>
             </div>
             <div class="card-footer text-muted">

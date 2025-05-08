@@ -45,6 +45,12 @@
     .terminal-line:empty::before {
         content: "\00a0";  /* Use non-breaking space to force height */
     }
+    .ascii-art {
+        font-family: 'Courier New', monospace;
+        white-space: pre;
+        line-height: 1.2;
+        margin: 1em 0;
+    }
 </style>
 
 <div class="row">
@@ -70,7 +76,7 @@
                 {% endif %}
             </div>
             <div class="card-body">
-                <p>{{ exercise.description }}</p>
+                {{ exercise.description | replace('<ascii-art>', '<pre class="ascii-art">') | replace('</ascii-art>', '</pre>') | safe }}
                 
                 {% if exercise.type == 'python' %}
                 <div class="mb-3">

@@ -16,6 +16,7 @@ class Exercise:
     type: str  # 'python' or 'terminal'
     title: str
     description: str
+    summary: str  # Short description for the home page
     template: Optional[str] = None
     test_cases: Optional[List[TestCase]] = None
     commands: Optional[List[str]] = None
@@ -27,8 +28,10 @@ EXERCISES = [
         id=1,
         type="python",
         title="Basic Python Operations",
-        description="""Write a function that takes two numbers and returns their sum and product.
-The function should return both values as a tuple.""",
+        summary="Write a function to calculate the sum and product of two numbers.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Write a function that takes two numbers and returns their sum and product.
+
+The function should return both values as a tuple.</pre>""",
         template="def calculate(a, b):\n    # Your code here\n    pass",
         test_cases=[
             TestCase(input=[2, 3], output=(5, 6), description="Basic positive numbers"),
@@ -40,8 +43,10 @@ The function should return both values as a tuple.""",
         id=2,
         type="python",
         title="List Comprehension",
-        description="""Write a function that returns a list of squares of even numbers from 1 to 10.
-The function should use a list comprehension to generate the squares.""",
+        summary="Generate a list of squares using list comprehension.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Write a function that returns a list of squares of even numbers from 1 to 10.
+
+The function should use a list comprehension to generate the squares.</pre>""",
         template="def squares():\n    # Your code here\n    pass",
         test_cases=[
             TestCase(input=None, output=[4, 16, 36, 64, 100], description="Squares of even numbers 1-10")
@@ -51,11 +56,12 @@ The function should use a list comprehension to generate the squares.""",
         id=3,
         type="terminal",
         title="Basic Terminal Commands",
-        description="""List all files in the current directory and create a new file called 'test.txt'.
+        summary="Practice basic file operations using ls and touch commands.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">List all files in the current directory and create a new file called 'test.txt'.
 
 Required steps:
 1. Create a new file named 'test.txt'
-2. List the contents of the current directory to verify the file was created""",
+2. List the contents of the current directory to verify the file was created</pre>""",
         commands=["ls", "touch test.txt", "ls"],
         expected_command_patterns=[
             "ls"
@@ -68,11 +74,12 @@ Required steps:
         id=4,
         type="python",
         title="String Manipulation",
-        description="""Write a function that takes a string and returns a dictionary with the count of each character.
+        summary="Create a character frequency counter for strings.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Write a function that takes a string and returns a dictionary with the count of each character.
 
 The function should:
 - Count how many times each character appears in the string
-- Return a dictionary where keys are characters and values are their counts""",
+- Return a dictionary where keys are characters and values are their counts</pre>""",
         template="def count_chars(text):\n    # Your code here\n    pass",
         test_cases=[
             TestCase(input=["hello"], output={"h": 1, "e": 1, "l": 2, "o": 1}, description="Basic string"),
@@ -84,12 +91,13 @@ The function should:
         id=5,
         type="python",
         title="File Processing",
-        description="""Write a function that reads a file and returns the number of lines containing a specific word.
+        summary="Count occurrences of a word in a text file.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Write a function that reads a file and returns the number of lines containing a specific word.
 
 Requirements:
 - The search should be case-insensitive (e.g., 'Python', 'PYTHON', and 'python' should all match)
 - The function should return the count of matching lines
-- Handle file reading errors appropriately""",
+- Handle file reading errors appropriately</pre>""",
         template="def count_word_occurrences(filename, word):\n    # Your code here\n    pass",
         test_cases=[
             TestCase(input=["sample.txt", "python"], output=3, description="Count Python occurrences")
@@ -99,19 +107,20 @@ Requirements:
         id=6,
         type="terminal",
         title="Working with Text Files",
-        description="""In this exercise, you'll create and manipulate a text file using basic terminal commands.
+        summary="Create and search text files using echo, cat, and grep.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">In this exercise, you'll create and manipulate a text file using basic terminal commands.
 
 Required steps:
-1. Create a file named 'names.txt' containing exactly these four names, one per line:
-   Alice
+1. Create a file named 'names.txt' containing exactly these four names, one per line:</pre>
+<pre class="ascii-art">   Alice
    Bob
    Charlie
-   David
-
+   David</pre>
+<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Display the contents of names.txt to verify it was created correctly
 3. Use grep to find and display the line containing 'Bob'
 
-Hint: You can use 'echo' with the -e flag and \\n for newlines to create the file in one command.""",
+Hint: You can use 'echo' with the -e flag and \\n for newlines to create the file in one command.</pre>""",
         commands=[
             "echo -e 'Alice\\nBob\\nCharlie\\nDavid' > names.txt",
             "cat names.txt",
@@ -124,21 +133,22 @@ Hint: You can use 'echo' with the -e flag and \\n for newlines to create the fil
         id=7,
         type="terminal",
         title="Directory Structure",
-        description="""Create and navigate a specific directory structure for a web project.
+        summary="Create and navigate a web project directory structure.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Create and navigate a specific directory structure for a web project.
 
 Required steps:
-1. Create the following directory structure:
-   webapp/
+1. Create the following directory structure:</pre>
+<pre class="ascii-art">   webapp/
    ├── src/
    │   ├── components/
    │   └── styles/
-   └── public/
-
+   └── public/</pre>
+<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Navigate into the components directory
 3. Verify you're in the correct location (path should end with components)
 4. List all directories to verify the structure
 
-Commands you'll need: mkdir -p, cd, pwd, ls""",
+Commands you'll need: mkdir -p, cd, pwd, ls</pre>""",
         commands=[
             "mkdir -p webapp/src/components webapp/src/styles webapp/public",
             "cd webapp/src/components",
@@ -151,18 +161,19 @@ Commands you'll need: mkdir -p, cd, pwd, ls""",
         id=8,
         type="terminal",
         title="Script Creation and Permissions",
-        description="""Create a shell script and make it executable.
+        summary="Create a shell script and set executable permissions.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Create a shell script and make it executable.
 
 Required steps:
-1. Create a file named 'greet.sh' with these exact contents:
-   #!/bin/bash
-   echo "Hello, World!"
-
+1. Create a file named 'greet.sh' with these exact contents:</pre>
+<pre class="ascii-art">   #!/bin/bash
+   echo "Hello, World!"</pre>
+<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Display the current permissions of greet.sh
 3. Make the script executable (add +x permission)
 4. Display the new permissions to verify the change
 
-The final permissions should show the executable bit set for all users (chmod a+x).""",
+The final permissions should show the executable bit set for all users (chmod a+x).</pre>""",
         commands=[
             "echo -e '#!/bin/bash\\necho \"Hello, World!\"' > greet.sh",
             "ls -l greet.sh",
@@ -176,24 +187,25 @@ The final permissions should show the executable bit set for all users (chmod a+
         id=9,
         type="terminal",
         title="Text Processing Pipeline",
-        description="""Process a list of fruits to count duplicates using pipes.
+        summary="Process text using sort, uniq, and pipes to count duplicates.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Process a list of fruits to count duplicates using pipes.
 
 Required steps:
-1. Create a file named 'fruits.txt' with these exact contents (one fruit per line):
-   apple
+1. Create a file named 'fruits.txt' with these exact contents (one fruit per line):</pre>
+<pre class="ascii-art">   apple
    banana
    apple
    cherry
    banana
    date
-   apple
-
+   apple</pre>
+<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Use a pipeline of commands to:
    - Sort the fruits alphabetically
    - Count how many times each fruit appears
    - Show only fruits that appear more than once
 
-The output should show the count followed by the fruit name.""",
+The output should show the count followed by the fruit name.</pre>""",
         commands=[
             "echo -e 'apple\\nbanana\\napple\\ncherry\\nbanana\\ndate\\napple' > fruits.txt",
             "sort fruits.txt | uniq -c | sort -nr | grep -v '^ *1 '"
@@ -205,11 +217,12 @@ The output should show the count followed by the fruit name.""",
         id=10,
         type="terminal",
         title="File Finding and Counting",
-        description="""Search for specific files and count them.
+        summary="Use find command to locate and count specific file types.",
+        description="""<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">Search for specific files and count them.
 
 Required steps:
-1. Create this directory structure with files:
-   test/
+1. Create this directory structure with files:</pre>
+<pre class="ascii-art">   test/
    ├── a.txt
    ├── b.txt
    ├── sub1/
@@ -217,13 +230,13 @@ Required steps:
    │   └── d.log
    └── sub2/
        ├── e.txt
-       └── f.log
-
+       └── f.log</pre>
+<pre class="exercise-description" style="white-space: pre-wrap; font-family: inherit;">
 2. Use the find command to:
    - Find all .txt files
    - Count how many there are
 
-The final output should show only the number of .txt files found.""",
+The final output should show only the number of .txt files found.</pre>""",
         commands=[
             "mkdir -p test/sub1 test/sub2",
             "touch test/a.txt test/b.txt test/sub1/c.txt test/sub1/d.log test/sub2/e.txt test/sub2/f.log",
