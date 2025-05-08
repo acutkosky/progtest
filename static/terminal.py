@@ -296,21 +296,42 @@ def execute_command(command_str: str) -> str:
     if not commands:
         return ""
         
-    # Create a StringIO to capture terminal output
+    # Create StringIO buffers to capture both stdout and stderr
     terminal_output = StringIO()
+    error_output = StringIO()
     
-    # If the last command outputs to stdout, redirect it to our terminal_output
-    if commands[-1].output_file == sys.stdout:
-        commands[-1] = commands[-1]._replace(output_file=terminal_output)
+    # Save original stderr
+    original_stderr = sys.stderr
+    sys.stderr = error_output
     
-    # Execute the command sequence
-    execute_command_sequence(commands)
-    
-    # Get the output
-    if isinstance(commands[-1].output_file, StringIO):
-        commands[-1].output_file.seek(0)
-        output = commands[-1].output_file.read()
-    else:
-        output = ""
+    try:
+        # If the last command outputs to stdout, redirect it to our terminal_output
+        if commands[-1].output_file == sys.stdout:
+            commands[-1] = commands[-1]._replace(output_file=terminal_output)
         
-    return output 
+        # Execute the command sequence
+        execute_command_sequence(commands)
+        
+        # Get the output and errors
+        error_output.seek(0)
+        errors = error_output.read()
+        
+        if isinstance(commands[-1].output_file, StringIO):
+            commands[-1].output_file.seek(0)
+            output = commands[-1].output_file.read()
+        else:
+            output = ""
+            
+        # Combine output and errors in the right order
+        return output + errors
+        
+    finally:
+        # Restore stderr
+        sys.stderr = original_stderr
+        
+        # Clean up any file handles
+        for cmd in commands:
+            if isinstance(cmd.input_file, TextIOBase) and not isinstance(cmd.input_file, StringIO):
+                cmd.input_file.close()
+            if isinstance(cmd.output_file, TextIOBase) and not isinstance(cmd.output_file, StringIO):
+                cmd.output_file.close() 
