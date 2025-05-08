@@ -361,7 +361,16 @@ try:
         with open(args[0], 'r') as f:
             print(f.read())
     elif cmd == 'echo':
-        content = ' '.join(args)
+        # Process quotes in arguments
+        processed_args = []
+        for arg in args:
+            # Remove surrounding quotes if they exist
+            if (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'")):
+                processed_args.append(arg[1:-1])
+            else:
+                processed_args.append(arg)
+        
+        content = ' '.join(processed_args)
         if output_file:
             with open(output_file, 'w') as f:
                 f.write(content)
