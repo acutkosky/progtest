@@ -1,61 +1,69 @@
 # Python/Terminal Diagnostic Test
 
-This web application provides a diagnostic test to evaluate Python programming skills and command-line proficiency. The test evaluates:
-
-1. Python Programming
-   - Basic operations and data types
-   - List comprehension
-   - String manipulation
-   - File handling
-   - Function implementation
-
-2. Terminal Commands
-   - File operations (create, read, modify)
-   - Directory navigation
-   - File permissions
-   - Text processing
-   - File searching and counting
-
-## Setup
-
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. Run the application:
-   ```bash
-   python app.py
-   ```
-
-3. Open a web browser and navigate to `http://localhost:5000`
-
-## Exercise Types
-
-The test includes two types of exercises:
-
-1. Python Exercises
-   - Write functions to solve specific problems
-   - Tests run against provided test cases
-   - Immediate feedback on correctness
-
-2. Terminal Exercises
-   - Execute command-line operations
-   - Work with files and directories
-   - Process text and manage permissions
-   - Verify command output matches expectations
+A static web application for Python programming and terminal command exercises, designed to be hosted on GitHub Pages.
 
 ## Features
 
-- Interactive coding exercises
-- Terminal simulation
-- Immediate feedback on solutions
-- Progress tracking
-- Detailed explanations for each question
+- Python coding exercises with automated testing
+- Terminal command exercises for practicing shell commands
+- Browser-based execution using Pyodide
+- No server required - runs entirely in the browser
+- Mobile-friendly responsive design
 
-## Project Structure
+## How It Works
 
-- `app.py`: Main Flask application
-- `templates/`: HTML templates
-- `static/`: CSS, JavaScript, and other static files
-- `exercises/`: Python exercise definitions and test cases 
+- Python code is executed in the browser using [Pyodide](https://pyodide.org/)
+- Terminal commands are simulated using a Python-based virtual file system
+- All exercise definitions are stored in JavaScript
+
+## Development
+
+To run the site locally:
+
+1. Clone the repository
+2. Serve the files using any static file server:
+   ```
+   python -m http.server 8000
+   ```
+3. Open `http://localhost:8000` in your browser
+
+## Modifying Exercises
+
+The exercises are defined in `js/exercises.js`. You can modify existing exercises or add new ones by following the format:
+
+```javascript
+{
+    id: 10,  // Unique ID
+    type: "python", // 'python' or 'terminal'
+    title: "Exercise Title",
+    summary: "Short description for the home page",
+    description: "Detailed HTML description",
+    template: "def function():\n    pass", // Template code for Python exercises
+    testCases: [
+        { input: [arg1, arg2], output: expectedOutput, description: "Test description" }
+    ],
+    // For terminal exercises
+    commands: ["command1", "command2"],
+    expectedCommandPatterns: ["pattern1", "pattern2"], 
+    expectedOutputPatterns: ["pattern1", "pattern2"]
+}
+```
+
+## Adding Python Files
+
+If you need to add or modify the Python backend files:
+
+1. Add your Python files to the `python/` directory
+2. Update the relevant JavaScript files to load and use your Python code
+
+## GitHub Pages Deployment
+
+The site is automatically deployed to GitHub Pages using the workflow in `.github/workflows/github-pages.yml`. When you push to the main branch, GitHub Actions will build and deploy the site.
+
+## Credits
+
+This project was migrated from a Flask application to a static GitHub Pages site. It uses:
+
+- [Pyodide](https://pyodide.org/) for Python execution in the browser
+- [Bootstrap](https://getbootstrap.com/) for UI components
+- [CodeMirror](https://codemirror.net/) for the code editor 

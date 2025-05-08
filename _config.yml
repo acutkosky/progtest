@@ -1,0 +1,20 @@
+title: Python/Terminal Diagnostic Test
+description: A static web application for Python programming and terminal command exercises.
+baseurl: ""
+url: ""
+
+# Build settings
+markdown: kramdown
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .github
+  - python/__pycache__
+  - venv
+  - app.py
+  - terminal_sessions
+  - .git
+  - .gitignore
+  - "**/*.pyc" 
