@@ -335,12 +335,23 @@ sys.stdout = sys.__stdout__
                     try {
                         const [cmd, ...args] = command.split(' ');
                         
-                        // Handle command redirection
-                        const redirectionIndex = args.findIndex(arg => arg === '>');
+                        // Handle command redirection with support for both > and >>
                         let outputFile = null;
-                        if (redirectionIndex !== -1) {
-                            outputFile = args[redirectionIndex + 1];
-                            args.splice(redirectionIndex, 2);
+                        let appendMode = false;
+                        
+                        // Check for >> first (to avoid matching > in >>)
+                        const appendIndex = args.findIndex(arg => arg === '>>');
+                        if (appendIndex !== -1) {
+                            outputFile = args[appendIndex + 1];
+                            args.splice(appendIndex, 2);
+                            appendMode = true;
+                        } else {
+                            // Check for > if >> wasn't found
+                            const redirectionIndex = args.findIndex(arg => arg === '>');
+                            if (redirectionIndex !== -1) {
+                                outputFile = args[redirectionIndex + 1];
+                                args.splice(redirectionIndex, 2);
+                            }
                         }
 
                         // Safely serialize the command for passing to Python
@@ -379,11 +390,21 @@ try:
     # Process all arguments
     args = [process_arg(arg) for arg in raw_args]
     
-    # Handle redirection
+    # Handle redirection with append mode
     output_file = ${outputFile ? `'${outputFile}'` : 'None'}
+    append_mode = ${appendMode ? 'True' : 'False'}
     
     # Get original command safely via JSON deserialization
     original_command = json.loads('''${serializedCommand}''')
+    
+    # Helper function for file output
+    def write_output(content, file_path, append=False):
+        mode = 'a' if append else 'w'
+        with open(file_path, mode) as f:
+            # Ensure content ends with a newline if it doesn't already
+            if not content.endswith("\\n"):
+                content += "\\n"
+            f.write(content)
     
     # Execute command
     if cmd == 'cd':
@@ -392,44 +413,60 @@ try:
         else:
             os.chdir(args[0])
     elif cmd == 'ls':
-        # Parse options
-        show_hidden = '-a' in args
-        long_format = '-l' in args
-        recursive = '-R' in args
+        # Capture the output for potential redirection
+        output_buffer = StringIO()
+        original_stdout = sys.stdout
+        sys.stdout = output_buffer
         
-        # Remove options from args
-        args = [arg for arg in args if not arg.startswith('-')]
-        
-        # Get target directory
-        target = '.' if not args else args[0]
-        
-        if os.path.isdir(target):
-            def list_dir(dir_path, indent=''):
-                files = os.listdir(dir_path)
-                if not show_hidden:
-                    files = [f for f in files if not f.startswith('.')]
-                
-                if long_format:
-                    for f in files:
-                        path = os.path.join(dir_path, f)
-                        st = os.stat(path)
-                        mode = stat.filemode(st.st_mode)
-                        size = st.st_size
-                        mtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime('%b %d %H:%M')
-                        print(f"{indent}{mode} {size:8d} {mtime} {f}")
-                else:
-                    print(indent + '\\n'.join(files))
-                
-                if recursive:
-                    for f in files:
-                        path = os.path.join(dir_path, f)
-                        if os.path.isdir(path):
-                            print(f"\\n{indent}{path}:")
-                            list_dir(path, indent + '  ')
+        try:
+            # Parse options
+            show_hidden = '-a' in args
+            long_format = '-l' in args
+            recursive = '-R' in args
             
-            list_dir(target)
-        else:
-            print(f"ls: cannot access '{target}': No such file or directory")
+            # Remove options from args
+            args = [arg for arg in args if not arg.startswith('-')]
+            
+            # Get target directory
+            target = '.' if not args else args[0]
+            
+            if os.path.isdir(target):
+                def list_dir(dir_path, indent=''):
+                    files = os.listdir(dir_path)
+                    if not show_hidden:
+                        files = [f for f in files if not f.startswith('.')]
+                    
+                    if long_format:
+                        for f in files:
+                            path = os.path.join(dir_path, f)
+                            st = os.stat(path)
+                            mode = stat.filemode(st.st_mode)
+                            size = st.st_size
+                            mtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime('%b %d %H:%M')
+                            print(f"{indent}{mode} {size:8d} {mtime} {f}")
+                    else:
+                        print(indent + '\\n'.join(files))
+                    
+                    if recursive:
+                        for f in files:
+                            path = os.path.join(dir_path, f)
+                            if os.path.isdir(path):
+                                print(f"\\n{indent}{path}:")
+                                list_dir(path, indent + '  ')
+                
+                list_dir(target)
+            else:
+                print(f"ls: cannot access '{target}': No such file or directory")
+        finally:
+            # Reset stdout and get the captured output
+            sys.stdout = original_stdout
+            content = output_buffer.getvalue()
+            
+            # Handle the output
+            if output_file:
+                write_output(content, output_file, append_mode)
+            else:
+                print(content, end='')
     elif cmd == 'pwd':
         print(os.getcwd())
     elif cmd == 'mkdir':
@@ -445,50 +482,73 @@ try:
     elif cmd == 'touch':
         pathlib.Path(args[0]).touch()
     elif cmd == 'cat':
-        with open(args[0], 'r') as f:
-            print(f.read())
-    elif cmd == 'echo':
-        # Get the original command to handle quotes properly
-        if original_command.startswith("echo "):
-            echo_content = original_command[5:]
-            
-            # Handle redirection separately
-            output_parts = echo_content.split(" > ", 1)
-            content = ' '.join(args)  # Use the pre-processed args
-            redirect_file = output_parts[1].strip() if len(output_parts) > 1 else None
-            
-            # Handle output
-            if redirect_file:
-                with open(redirect_file, 'w') as f:
-                    f.write(content)
-            else:
-                print(content)
-        else:
-            # Fallback for edge cases
-            content = ' '.join(args)
-            if output_file:
-                with open(output_file, 'w') as f:
-                    f.write(content)
-            else:
-                print(content)
-    elif cmd == 'find':
-        start_dir = '.' if not args else args[0]
-        pattern = '*' if len(args) <= 1 else args[1]
-        
-        for root, dirs, files in os.walk(start_dir):
-            for name in files:
-                if fnmatch.fnmatch(name, pattern):
-                    print(os.path.join(root, name))
-    elif cmd == 'grep':
-        pattern = args[0]
-        files = args[1:] if len(args) > 1 else ['.']
-        
-        for file in files:
-            if os.path.isfile(file):
+        if output_file:
+            content = []
+            for file in args:
                 with open(file, 'r') as f:
-                    for i, line in enumerate(f, 1):
-                        if pattern in line:
-                            print(f"{file}:{i}:{line.rstrip()}")
+                    content.append(f.read())
+            write_output(''.join(content), output_file, append_mode)
+        else:
+            for file in args:
+                with open(file, 'r') as f:
+                    print(f.read(), end='')
+    elif cmd == 'echo':
+        content = ' '.join(args)
+        if output_file:
+            write_output(content, output_file, append_mode)
+        else:
+            print(content)
+    elif cmd == 'find':
+        # Capture the output for potential redirection
+        output_buffer = StringIO()
+        original_stdout = sys.stdout
+        sys.stdout = output_buffer
+        
+        try:
+            start_dir = '.' if not args else args[0]
+            pattern = '*' if len(args) <= 1 else args[1]
+            
+            for root, dirs, files in os.walk(start_dir):
+                for name in files:
+                    if fnmatch.fnmatch(name, pattern):
+                        print(os.path.join(root, name))
+        finally:
+            # Reset stdout and get the captured output
+            sys.stdout = original_stdout
+            content = output_buffer.getvalue()
+            
+            # Handle the output
+            if output_file:
+                write_output(content, output_file, append_mode)
+            else:
+                print(content, end='')
+                
+    elif cmd == 'grep':
+        # Capture the output for potential redirection
+        output_buffer = StringIO()
+        original_stdout = sys.stdout
+        sys.stdout = output_buffer
+        
+        try:
+            pattern = args[0]
+            files = args[1:] if len(args) > 1 else ['.']
+            
+            for file in files:
+                if os.path.isfile(file):
+                    with open(file, 'r') as f:
+                        for i, line in enumerate(f, 1):
+                            if pattern in line:
+                                print(f"{file}:{i}:{line.rstrip()}")
+        finally:
+            # Reset stdout and get the captured output
+            sys.stdout = original_stdout
+            content = output_buffer.getvalue()
+            
+            # Handle the output
+            if output_file:
+                write_output(content, output_file, append_mode)
+            else:
+                print(content, end='')
     elif cmd == 'cp':
         if '-r' in args:
             args = [arg for arg in args if not arg.startswith('-')]
