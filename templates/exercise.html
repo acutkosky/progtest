@@ -86,9 +86,20 @@
         try {
             pyodide = await loadPyodide();
             await pyodide.loadPackage(['numpy', 'pandas']);
-            document.getElementById('output').textContent = 'Pyodide loaded successfully!';
+            
+            // Only update output element for Python exercises
+            if (currentExercise.type === 'python') {
+                document.getElementById('output').textContent = 'Pyodide loaded successfully!';
+            }
+            return true;
         } catch (error) {
-            document.getElementById('output').textContent = 'Error loading Pyodide: ' + error;
+            // Handle error differently based on exercise type
+            if (currentExercise.type === 'python') {
+                document.getElementById('output').textContent = 'Error loading Pyodide: ' + error;
+            } else {
+                console.error('Error loading Pyodide:', error);
+            }
+            return false;
         }
     }
 
@@ -231,8 +242,12 @@ sys.stdout = sys.__stdout__
         let currentDir = '/';
 
         // Initialize Pyodide for terminal
-        initPyodide().then(() => {
-            output.innerHTML += `<div class="text-success">Terminal initialized. You can start entering commands.</div>`;
+        initPyodide().then((success) => {
+            if (success) {
+                output.innerHTML += `<div class="text-success">Terminal initialized. You can start entering commands.</div>`;
+            } else {
+                output.innerHTML += `<div class="text-danger">Failed to initialize terminal. Please refresh the page.</div>`;
+            }
         });
 
         // Handle command submission
