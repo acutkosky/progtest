@@ -10,6 +10,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
+    <!-- Load Pyodide in the head to ensure it starts loading early -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
     <style>
         #terminal {
             font-family: 'Courier New', monospace;
@@ -59,9 +61,35 @@
             line-height: 1.2;
             margin: 1em 0;
         }
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+        }
+        #loading-message {
+            margin-top: 20px;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div id="loading-message">Loading Python Environment...</div>
+    </div>
+
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="/">Python/Terminal Diagnostic Test</a>
@@ -122,7 +150,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <!-- Load other scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
@@ -133,31 +161,310 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/indent-fold.min.js"></script>
     
-    <script src="js/exercises.js"></script>
-    <script src="js/python-runner.js"></script>
-    <script src="js/terminal.js"></script>
-    <script src="js/main.js"></script>
-    
+    <!-- Direct initialization script before loading any app scripts -->
     <script>
-        // Additional script to show/hide the appropriate exercise type
-        document.addEventListener('DOMContentLoaded', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const exerciseId = parseInt(urlParams.get('id'));
-            
-            if (!isNaN(exerciseId) && typeof getExercise === 'function') {
-                const exercise = getExercise(exerciseId);
-                if (exercise) {
-                    // Show the appropriate exercise UI
-                    if (exercise.type === 'python') {
-                        document.getElementById('python-exercise').style.display = 'block';
-                        document.getElementById('terminal-exercise').style.display = 'none';
-                    } else if (exercise.type === 'terminal') {
-                        document.getElementById('python-exercise').style.display = 'none';
-                        document.getElementById('terminal-exercise').style.display = 'block';
+        // Initialize Pyodide directly here (without overlapping main.js variables)
+        let localPyodide = null;
+        
+        async function loadEnvironment() {
+            try {
+                console.log("Starting direct Pyodide initialization...");
+                document.getElementById('loading-message').textContent = "Loading Python Environment...";
+                
+                // Load Pyodide
+                localPyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
+                });
+                
+                console.log("Pyodide loaded successfully");
+                document.getElementById('loading-message').textContent = "Loading Python Packages...";
+                
+                // Load common packages
+                await localPyodide.loadPackagesFromImports('numpy pandas');
+                console.log("Pyodide packages loaded");
+                
+                // Set global pyodide
+                window.pyodide = localPyodide;
+                
+                // Load Python files
+                document.getElementById('loading-message').textContent = "Loading Python Files...";
+                
+                // Load exercises.js first to get exercise data
+                await loadScript('js/exercises.js');
+                
+                // Load exercises.py
+                const exercisesResponse = await fetch('./python/exercises.py');
+                const exercisesCode = await exercisesResponse.text();
+                
+                // Load test_runner.py
+                const testRunnerResponse = await fetch('./python/test_runner.py');
+                const testRunnerCode = await testRunnerResponse.text();
+                
+                // Load terminal.py
+                const terminalResponse = await fetch('./python/terminal.py');
+                const terminalCode = await terminalResponse.text();
+                
+                console.log("Python files loaded");
+                document.getElementById('loading-message').textContent = "Setting Up Python Modules...";
+                
+                // Set up Python environment
+                localPyodide.runPython('import sys');
+                localPyodide.runPython('from io import StringIO');
+                localPyodide.runPython('import os');
+                
+                // Create modules
+                localPyodide.runPython('exercises = type(sys)("exercises")');
+                localPyodide.runPython('sys.modules["exercises"] = exercises');
+                localPyodide.globals.set('exercises_code', exercisesCode);
+                localPyodide.runPython('exec(exercises_code, sys.modules["exercises"].__dict__)');
+                
+                localPyodide.runPython('test_runner = type(sys)("test_runner")');
+                localPyodide.runPython('sys.modules["test_runner"] = test_runner');
+                localPyodide.globals.set('test_runner_code', testRunnerCode);
+                localPyodide.runPython('exec(test_runner_code, sys.modules["test_runner"].__dict__)');
+                
+                localPyodide.runPython('terminal = type(sys)("terminal")');
+                localPyodide.runPython('sys.modules["terminal"] = terminal');
+                localPyodide.globals.set('terminal_code', terminalCode);
+                localPyodide.runPython('exec(terminal_code, sys.modules["terminal"].__dict__)');
+                
+                console.log("Python modules set up");
+                document.getElementById('loading-message').textContent = "Loading Exercise...";
+                
+                // Now get the exercise
+                const urlParams = new URLSearchParams(window.location.search);
+                const exerciseId = parseInt(urlParams.get('id'));
+                
+                if (!isNaN(exerciseId)) {
+                    if (typeof getExercise === 'function') {
+                        const exercise = getExercise(exerciseId);
+                        
+                        if (exercise) {
+                            console.log("Exercise loaded:", exercise);
+                            
+                            // Set up exercise
+                            document.getElementById('exercise-title').textContent = exercise.title;
+                            document.getElementById('exercise-description').innerHTML = exercise.description;
+                            
+                            // Load script for Python-runner or terminal as needed
+                            if (exercise.type === 'python') {
+                                // Show Python UI
+                                document.getElementById('python-exercise').style.display = 'block';
+                                
+                                // Set up editor
+                                const codeEditor = document.getElementById('code-editor');
+                                codeEditor.value = exercise.template || '';
+                                
+                                await loadScript('js/python-runner.js');
+                                
+                                // Initialize CodeMirror
+                                window.editor = CodeMirror.fromTextArea(codeEditor, {
+                                    mode: 'python',
+                                    theme: 'monokai',
+                                    lineNumbers: true,
+                                    indentUnit: 4,
+                                    tabSize: 4,
+                                    indentWithTabs: false,
+                                    lineWrapping: true,
+                                    matchBrackets: true,
+                                    autoCloseBrackets: true
+                                });
+                                
+                                // Initialize Python runner with our pre-initialized Pyodide
+                                const pythonRunner = createPythonRunner('output');
+                                
+                                // Directly set properties to skip initialization
+                                pythonRunner.pyodideReady = true;
+                                pythonRunner.exercisesModule = localPyodide.pyimport("exercises");
+                                pythonRunner.testRunnerModule = localPyodide.pyimport("test_runner");
+                                
+                                // Store in window object
+                                window.pythonRunner = pythonRunner;
+                                window.currentExercise = exercise;
+                                
+                                // Update output
+                                document.getElementById('output').textContent = 'Environment ready. Click "Run Code" to test your solution.';
+                                
+                                // Set up run button
+                                const runButton = document.getElementById('run-button');
+                                runButton.addEventListener('click', function() {
+                                    runPythonCode();
+                                    const code = window.editor.getValue();
+                                    window.pythonRunner.runCode(code, window.currentExercise);
+                                });
+                                
+                                // Update status
+                                document.getElementById('exercise-status').innerHTML = 
+                                    '<span class="badge bg-primary">Ready</span>';
+                                
+                            } else if (exercise.type === 'terminal') {
+                                // Show Terminal UI
+                                document.getElementById('terminal-exercise').style.display = 'block';
+                                
+                                await loadScript('js/terminal.js');
+                                
+                                // Initialize terminal
+                                const terminal = createTerminal('terminal-output', 'terminal-input');
+                                if (terminal) {
+                                    terminal.pyodideReady = true;
+                                    terminal.terminalModule = localPyodide.pyimport("terminal");
+                                    terminal.addOutputLine('Terminal ready. Enter commands to begin.', 'text-success');
+                                    
+                                    // Store in window
+                                    window.terminal = terminal;
+                                    window.currentExercise = exercise;
+                                    
+                                    // Set up status callback
+                                    terminal.setStatusCallback((command) => {
+                                        const isComplete = terminal.checkExerciseCompletion(window.currentExercise);
+                                        if (isComplete) {
+                                            document.getElementById('exercise-status').innerHTML = 
+                                                '<span class="badge bg-success">Completed</span>';
+                                        } else {
+                                            document.getElementById('exercise-status').innerHTML = 
+                                                '<span class="badge bg-primary">In Progress</span>';
+                                        }
+                                    });
+                                    
+                                    // Update status
+                                    document.getElementById('exercise-status').innerHTML = 
+                                        '<span class="badge bg-primary">Ready</span>';
+                                }
+                            }
+                            
+                        } else {
+                            document.getElementById('loading-message').textContent = "Exercise not found!";
+                            console.error("Exercise not found:", exerciseId);
+                        }
+                    } else {
+                        document.getElementById('loading-message').textContent = "Error loading exercises!";
+                        console.error("getExercise function not available");
                     }
+                } else {
+                    document.getElementById('loading-message').textContent = "Invalid exercise ID!";
+                    console.error("Invalid exercise ID");
                 }
+                
+                // Hide loading overlay
+                document.getElementById('loading-overlay').style.display = 'none';
+                
+            } catch (error) {
+                console.error("Error during initialization:", error);
+                document.getElementById('loading-message').textContent = "Error: " + error.message;
+                alert("Error initializing environment: " + error.message);
             }
-        });
+        }
+        
+        // Function to load a script dynamically
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+                document.body.appendChild(script);
+            });
+        }
+        
+        // Start loading everything once the page is ready
+        document.addEventListener('DOMContentLoaded', loadEnvironment);
+
+        // Run Python code
+        async function runPythonCode() {
+            const output = document.getElementById('output');
+            if (!window.pyodide) {
+                output.textContent = 'Python environment not initialized';
+                return;
+            }
+            
+            try {
+                output.textContent = 'Running tests...';
+                
+                // Get the code from the editor
+                const code = window.editor.getValue();
+                
+                // Import needed modules
+                const testRunnerModule = localPyodide.pyimport("test_runner");
+                const exercisesModule = localPyodide.pyimport("exercises");
+                
+                // Convert test cases to Python format
+                const testCases = [];
+                for (const testCase of window.currentExercise.testCases) {
+                    const pyTestCase = exercisesModule.TestCase(
+                        testCase.input === null ? null : testCase.input,
+                        testCase.output,
+                        testCase.description
+                    );
+                    testCases.push(pyTestCase);
+                }
+                
+                // Run tests
+                const results = testRunnerModule.run_tests(code, testCases);
+                
+                // Format results
+                const outputLines = [];
+                let passedTests = 0;
+                
+                for (let i = 0; i < results.length; i++) {
+                    const result = results[i];
+                    outputLines.push(`Test case: ${result.description}`);
+                    outputLines.push(`Expected: ${result.expected}`);
+                    outputLines.push(`Got: ${result.got}`);
+                    
+                    if (result.output) {
+                        outputLines.push('Output:');
+                        outputLines.push(result.output);
+                    }
+                    
+                    // Fix the comparison - manually check if the results represent the same values
+                    // even if format is different (Python tuple vs JS array)
+                    let passed = result.passed;
+                    
+                    // If the test is failing but might be due to tuple/array mismatch, check manually
+                    if (!passed && typeof result.got === 'string' && result.got.startsWith('(') && result.got.endsWith(')')) {
+                        // Extract values from Python tuple string like "(5, 6)"
+                        const tupleContent = result.got.slice(1, -1); // Remove ( and )
+                        const tupleValues = tupleContent.split(',').map(v => v.trim());
+                        
+                        // Convert test's expected value to string for comparison
+                        const expectedStr = String(result.expected);
+                        const expectedValues = expectedStr.split(',').map(v => v.trim());
+                        
+                        // Check if values match
+                        if (tupleValues.length === expectedValues.length) {
+                            let allMatch = true;
+                            for (let j = 0; j < tupleValues.length; j++) {
+                                if (tupleValues[j] !== expectedValues[j]) {
+                                    allMatch = false;
+                                    break;
+                                }
+                            }
+                            passed = allMatch;
+                        }
+                    }
+                    
+                    outputLines.push(`Passed: ${passed ? 'Yes' : 'No'}`);
+                    outputLines.push('---');
+                    
+                    if (passed) passedTests++;
+                }
+                
+                outputLines.push(`\nPassed ${passedTests} out of ${results.length} tests`);
+                
+                // Display output
+                output.textContent = outputLines.join('\n');
+                
+                // Update status if all tests passed
+                if (passedTests === results.length) {
+                    document.getElementById('exercise-status').innerHTML = 
+                        '<span class="badge bg-success">Completed</span>';
+                }
+                
+            } catch (error) {
+                console.error("Error running code:", error);
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
     </script>
 </body>
 </html> 

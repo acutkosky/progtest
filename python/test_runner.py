@@ -3,19 +3,20 @@ import sys
 import os
 import tempfile
 import importlib.util
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, Optional
 from dataclasses import dataclass
 from io import StringIO
 from exercises import TestCase
+import traceback
 
 @dataclass
 class TestResult:
-    """Result of a single test case."""
-    passed: bool
+    """Result of a test case execution."""
+    description: str
     expected: Any
     got: Any
-    output: str
-    description: str
+    passed: bool
+    output: Optional[str] = None
 
 def create_temp_module(code: str) -> Tuple[str, str]:
     """Create a temporary Python module from the given code.
@@ -99,33 +100,112 @@ Java is another language''')
         if function_name == 'count_word_occurrences' and os.path.exists('sample.txt'):
             os.remove('sample.txt')
 
-def run_tests(code: str, test_cases: List['TestCase'], function_name: str = None) -> List[TestResult]:
-    """Run all test cases for a given piece of code.
-    
-    Args:
-        code: The Python code to test
-        test_cases: List of TestCase objects
-        function_name: Name of the function to test (if None, extracted from code)
-    
-    Returns:
-        List of TestResult objects
+def run_tests(code: str, test_cases: List[Any]) -> List[TestResult]:
     """
-    # Extract function name from code if not provided
-    if not function_name:
-        import re
-        match = re.search(r'def\s+(\w+)\s*\(', code)
-        if not match:
-            raise ValueError("Could not find function definition in code")
-        function_name = match.group(1)
+    Run the provided code against the given test cases.
+    Returns a list of TestResult objects.
+    """
+    results = []
     
-    # Create and import temporary module
-    module_name, module_path = create_temp_module(code)
+    # Create a namespace for the code execution
+    namespace = {}
+    
     try:
-        module = import_temp_module(module_name, module_path)
-        # Run all test cases
-        results = [run_test_case(module, function_name, test_case) 
-                  for test_case in test_cases]
-        return results
-    finally:
-        # Clean up temporary file
-        os.unlink(module_path) 
+        # Execute the code to define the function
+        exec(code, namespace)
+    except Exception as e:
+        # If there's an error in the code itself, return that for all test cases
+        error_msg = f"Error in code: {str(e)}\n{traceback.format_exc()}"
+        return [TestResult(
+            description=tc.description,
+            expected=tc.output,
+            got=error_msg,
+            passed=False
+        ) for tc in test_cases]
+    
+    # Run each test case
+    for tc in test_cases:
+        # Redirect stdout to capture print statements
+        old_stdout = sys.stdout
+        sys.stdout = mystdout = StringIO()
+        
+        try:
+            # Get the function - assume it's the first function defined
+            for name, obj in namespace.items():
+                if callable(obj) and name != 'exec' and not name.startswith('__'):
+                    function = obj
+                    break
+            else:
+                raise ValueError("No function defined in code")
+            
+            # Call the function with the test inputs
+            if tc.input is None:
+                result = function()
+            else:
+                result = function(*tc.input)
+            
+            # Get any printed output
+            output = mystdout.getvalue()
+            
+            # Check if the result matches the expected output
+            # This is where we handle tuple vs list comparison
+            passed = compare_values(result, tc.output)
+            
+            results.append(TestResult(
+                description=tc.description,
+                expected=tc.output,
+                got=result,
+                passed=passed,
+                output=output.strip() if output.strip() else None
+            ))
+            
+        except Exception as e:
+            # Capture exceptions during function execution
+            error_msg = f"Error during execution: {str(e)}\n{traceback.format_exc()}"
+            results.append(TestResult(
+                description=tc.description,
+                expected=tc.output,
+                got=error_msg,
+                passed=False,
+                output=mystdout.getvalue().strip() if mystdout.getvalue().strip() else None
+            ))
+        finally:
+            # Restore stdout
+            sys.stdout = old_stdout
+    
+    return results
+
+def compare_values(got, expected):
+    """
+    Compare values with better support for Python tuples vs JavaScript arrays.
+    
+    This handles cases where a Python tuple like (5, 6) needs to match 
+    a JavaScript array representation like [5, 6].
+    """
+    # Check if values are directly equal
+    if got == expected:
+        return True
+    
+    # For tuples and lists, compare their elements
+    if isinstance(got, (tuple, list)) and isinstance(expected, (tuple, list)):
+        if len(got) != len(expected):
+            return False
+        return all(compare_values(g, e) for g, e in zip(got, expected))
+    
+    # If the expected value is a string representation like "5,6" and 
+    # the actual is a tuple/list like (5, 6) or [5, 6], try to compare them
+    if isinstance(got, (tuple, list)) and isinstance(expected, str):
+        # Convert "5,6" to [5, 6] for comparison
+        try:
+            expected_values = [int(x.strip()) if x.strip().isdigit() or (x.strip() and x.strip()[0] == '-' and x.strip()[1:].isdigit()) else x.strip() for x in expected.split(',')]
+            if len(expected_values) == len(got):
+                return all(compare_values(g, e) for g, e in zip(got, expected_values))
+        except:
+            # If any parsing error, fall back to string comparison
+            return str(got) == expected
+    
+    # For any other types, convert to strings and compare
+    try:
+        return str(got).strip() == str(expected).strip()
+    except:
+        return False 

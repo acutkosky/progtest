@@ -16,17 +16,23 @@ class TerminalInterface {
             // Add loading message
             this.addOutputLine('Loading terminal environment...', 'text-info');
             
-            // Load Pyodide if not already loaded
+            // Get the global Pyodide instance
+            if (typeof initPyodide !== 'function') {
+                throw new Error("initPyodide function not found. Make sure the main.js script is properly loaded.");
+            }
+            
+            window.pyodide = await initPyodide();
             if (!window.pyodide) {
-                window.pyodide = await loadPyodide();
-                await pyodide.loadPackagesFromImports('numpy pandas');
+                throw new Error("Failed to initialize Pyodide.");
             }
             
             // Load the terminal.py module
-            const response = await fetch('/python/terminal.py');
+            console.log("Loading terminal.py...");
+            const response = await fetch('./python/terminal.py');
             const terminalCode = await response.text();
             
             // Create terminal module in Python
+            console.log("Creating terminal module...");
             pyodide.runPython('import sys');
             pyodide.runPython('from io import StringIO');
             pyodide.runPython('import os');
@@ -42,6 +48,7 @@ class TerminalInterface {
             
             this.pyodideReady = true;
             this.addOutputLine('Terminal ready. Enter commands to begin.', 'text-success');
+            console.log("Terminal environment initialized successfully!");
             return true;
         } catch (error) {
             console.error('Error loading terminal:', error);
